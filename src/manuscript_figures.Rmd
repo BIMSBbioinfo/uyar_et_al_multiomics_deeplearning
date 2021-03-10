@@ -7,6 +7,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+# todo: pass this as argument
 settings <- yaml::read_yaml('/data/local/buyar/arcas/pancancer_multiomics_manuscript/settings.yaml')
 source(settings$utility_script)
 library(data.table)
@@ -17,12 +18,17 @@ library(ggpubr)
 library(cowplot)
 theme_set(ggpubr::theme_pubclean())
 
+# todo: move this to settings file
 inputDir <- '/data/local/buyar/arcas/pancancer_multiomics_manuscript/output'
 assay_dir <- settings$assay_output$folder
 surv <- do.call(rbind, readRDS(settings$surv))
 projectDict <- sapply(yaml::read_yaml(settings$projectDict), 
                       function(x) gsub(' ', '', unlist(strsplit(x, ','))))
 tcga_subtypes <- process_tcga_subtypes()
+
+Figures <- c() # accummulate all figures in this
+SuppFigures <- c() # accumulate all supplementary figures in this
+
 ```
 
 ```{r import_lfs}
@@ -177,13 +183,13 @@ p4 <- plot_datatype_contribution_by_factor(LFs, FWs, 'maui_factors',
 p4 <- p4 + labs(y = 'Relative Contribution\nto top latent factor') + 
   theme(legend.position = 'right', legend.background = element_blank())
 
-Fig1 <- plot_grid(plot_grid(p1, p2, nrow = 1, labels = c('A', 'B')), 
+Fig <- plot_grid(plot_grid(p1, p2, nrow = 1, labels = c('A', 'B')), 
                   plot_grid(p3, p4, rel_widths = c(5,3), nrow = 1, labels = c('C', 'D')), 
                   nrow = 2,
                   rel_heights = c(2,3))
 
-print(Fig1)
-ggsave('pancancer_cancer_type_prediction.pdf', plot = Fig1, units = 'in', width = 12, height = 9)
+Figures <- c(Figures, Fig)
+ggsave('pancancer_cancer_type_prediction.pdf', plot = Fig, units = 'in', width = 12, height = 9)
 
 # predictability of subtypes using pancancer LFs
 pancancer_subtype_stats <- predict_labels(LFs, surv, tcga_subtypes, 'pancancer', 
@@ -201,15 +207,13 @@ labels <- tcga_subtypes[match(rownames(M), bcr_patient_barcode)]$Subtype_Selecte
 
 p3 <- plot_label_specific_vars(M, labels)
 
-Fig2 <- plot_grid(plot_grid(p1, p2, nrow = 2), p3, ncol = 2, rel_widths = c(2, 3), 
+Fig <- plot_grid(plot_grid(p1, p2, nrow = 2), p3, ncol = 2, rel_widths = c(2, 3), 
           labels = 'AUTO')
-print(Fig2)
+print(Fig)
 
-ggsave('pancancer_subtype_prediction.pdf', plot = Fig2, units = 'in', width = 12, height = 9)
+ggsave('pancancer_subtype_prediction.pdf', plot = Fig, units = 'in', width = 12, height = 9)
 
-# train/test accuracy correlation 
-#ggscatter(pancancer_subtype_stats, x = 'train_auc', y = 'test_auc', 
- #         color = 'method', facet.by = 'method', add = 'reg.line')
+SuppFigures <- c(SuppFigures, Fig)
 ```
 
 # Unsupervised pan-cancer clustering 
@@ -251,9 +255,6 @@ get_plot <- function(M, plot.type = 'cancertype') {
 pr <-  'pancancer' #'pancancer 99%' # 'nsclc 98%' pan-gastrointestinal 98% 'pan-gyn 98%'
 e <- paste0(pr, '.cnv_gex_meth_mut')
 
-#M <- LFs$pca_factors[[e]]
-#ct <- surv[match(rownames(M), bcr_patient_barcode)]$project
-
 # for maui, we drop redundant LFs 
 p1 <- get_plot(remove_redundant_variables(LFs$maui_factors[[e]], perc = 99), 'cancertype') 
 p2 <- get_plot(LFs$pca_factors[[e]], 'cancertype') # use all pcs, 
@@ -269,8 +270,9 @@ p4 <- ggplot(melt(data.frame('MAUI' = p1$ami, 'PCA' = p2$ami, 'MOFA' = p3$ami)),
 
 
 Fig <- cowplot::plot_grid(p1$p, p2$p, p3$p, p4, nrow = 4, labels = 'AUTO')
-print(Fig)
 ggsave("pancancer.unsupervised_clustering.pdf", Fig, units = 'in', width = 10, height = 12)
+
+Figures <- c(Figures, Fig)
 ```
 
 
@@ -281,12 +283,12 @@ Use top 10 factors (derived from multi-omics) to cluster samples using cancer-sp
 multi_omics_comb <- 'cnv_gex_meth_mut'
 experiments <- grep(paste0('^TCGA-.*.', multi_omics_comb), names(LFs$pca_factors), value = T)
 cl <- parallel::makeCluster(20)
-parallel::clusterExport(cl, varlist = c('LFs', 'experiments'))
+parallel::clusterExport(cl, varlist = c('LFs', 'experiments', 'settings'))
 clusters <- sapply(simplify = F, names(LFs), function(tool) {
   message("Clustering top ",tool)
   pbapply::pbsapply(cl = cl, simplify = F, experiments, function(experiment) {
     message(experiment)
-    source('/data/local/buyar/arcas/subtyping_paper/src/common_functions.R')
+    source(settings$utility_script)
     require(data.table)
     M <- LFs[[tool]][[experiment]]
     if(tool == 'maui_factors') {
@@ -354,12 +356,12 @@ p3 <- ggplot(dt,
         facet_wrap(~ kv, ncol = 2) +
         labs(title = 'Multi-omics clustering: Silhouette vs APN')
 
-Fig4 <- plot_grid(plot_grid(p1, p2, labels = 'AUTO', ncol = 1),
+Fig <- plot_grid(plot_grid(p1, p2, labels = 'AUTO', ncol = 1),
                   p3, ncol = 2, rel_widths = c(2,3), labels = c('','C'))
-print(Fig4)
-ggsave('cluster_stability_metrics.pdf', plot = Fig4, units = 'in', 
+ggsave('cluster_stability_metrics.pdf', plot = Fig, units = 'in', 
        width = 10, height = 8)
 
+Figures <- c(Figures, Fig)
 ```
 
 # survival-predictive factors
@@ -374,16 +376,17 @@ clin_factors <- c('age_at_initial_pathologic_diagnosis', 'gender', 'ajcc_patholo
 
 experiments <- grep('^TCGA-.*.cnv_gex_meth_mut', names(LFs$maui_factors), value = T)
 cl <- parallel::makeCluster(20)
-parallel::clusterExport(cl, varlist = c('LFs', 'clin_factors', 'surv', 'experiments'))
+parallel::clusterExport(cl, varlist = c('LFs', 'clin_factors', 
+                                        'surv', 'experiments', 'settings'))
 surv.stats <- pbapply::pbsapply(cl = cl, simplify = F, experiments, function(experiment) {
     require(data.table)
-    source('/data/local/buyar/arcas/subtyping_paper/src/common_functions.R')
+    source(settings$utility_script)
     message(experiment)
     M <- LFs$maui_factors[[experiment]]
     # get clinical factors for the patients in matrix
     clin <- process_clinical_covariates(rownames(M))
     clin <- get_surv_df(surv, clin[,intersect(colnames(clin), clin_factors),drop = F])
-    res <- get_prognostic_covariates(clin, M)
+    res <- get_prognostic_covariates(surv, clin, M)
     if(!is.null(res)) {
       cancer_type <- strsplit(experiment, "\\.")[[1]][1]
       res$project <- cancer_type
@@ -436,9 +439,6 @@ plots <- plots[!sapply(plots, is.null)]
 p1 <- cowplot::plot_grid(plotlist = plots, nrow = 3, 
                    labels = sapply(strsplit(names(plots), '\\.'), function(x) x[1]), 
                    label_size = 8)
-print(p1)
-ggsave(filename = 'surv.adjustedcurves.prog_lfs.pdf', plot = p1, width = 12, height = 8, units = 'in')
-
 # plot hazard ratios for top LF per cancer type 
 hr <- do.call(rbind, lapply(names(surv.stats), function(x) {
   if(is.null(surv.stats[[x]])) {return(NULL)}
@@ -454,11 +454,8 @@ hr <- hr[!is.infinite(hr$hr_high),]
 p2 <- ggplot(hr, aes(x = reorder(paste0(project, ' (', latent_factor, ')'), hr), y = log(hr))) +
   geom_bar(stat = 'identity') + 
   geom_errorbar(aes(ymin = log(hr_low), ymax = log(hr_high)), width = 0.2) + 
-  #geom_text(aes(label = latent_factor, y = ifelse(hr > 1, log(hr+0.005), log(hr-0.005))), 
-   #         nudge_x = 0.25) + 
   labs(x = '', y = 'log(hazard-ratio) of top latent factor per cancer\n(adjusted for tumor stage + age + gender)')+
   coord_flip()
-
 
 # make a plot to show improvement in C index with LFs on top of clinical factors
 ci <- do.call(rbind, lapply(names(surv.stats), function(x) {
@@ -484,11 +481,12 @@ p3 <- ggplot(ci, aes(x = reorder(project, with_lf))) +
         legend.direction = 'vertical', legend.box.background = element_blank()) +
   scale_color_brewer(type = 'qual', palette = 6)
 
-p <- cowplot::plot_grid(p3, p2, nrow = 1, labels = 'AUTO')
+Fig <- cowplot::plot_grid(cowplot::plot_grid(p3, p2, nrow = 1, labels = c('A', 'B')),
+                        p1, labels = c('', 'C'), nrow = 2)
 
-print(p)
-ggsave(filename = 'surv.Cindex_improv.hazard_ratio.pdf', plot = p, width = 12, height = 8, units = 'in')
+ggsave(filename = 'surv.Cindex_improv.hazard_ratio.pdf', plot = p, width = 12, height = 14, units = 'in')
 
+Figures <- c(Figures, Fig)
 ```
 
 # clinical factor associated MAUI LFs
@@ -499,12 +497,12 @@ Find maui LFs associated to clinical factors and plot them
 experiments <- grep('^TCGA-.*.cnv_gex_meth_mut', names(LFs$maui_factors), value = T)
 # find clinical-factor associated LFs 
 cl <- parallel::makeCluster(10)
-parallel::clusterExport(cl, varlist = c('experiments', 'LFs'))
+parallel::clusterExport(cl, varlist = c('experiments', 'LFs', 'settings'))
 clin.stats <- do.call(rbind, 
         pbapply::pbsapply(cl = cl, simplify = F, 
                experiments, function(experiment) {
                require(data.table)
-               source('/data/local/buyar/arcas/subtyping_paper/src/common_functions.R')
+               source(settings$utility_script)
                M <- LFs$maui_factors[[experiment]]
                clin <- process_clinical_covariates(rownames(M))
                dt <- do.call(rbind, 
@@ -514,7 +512,7 @@ clin.stats <- do.call(rbind,
                         factors <- clin[,x]
                         m <- M[!is.na(factors),]
                         factors <- factors[!is.na(factors)]
-                        dt <- get_factor_specific_variables(m, factors) #compute_anova(m, factors)
+                        dt <- get_factor_specific_variables(m, factors) 
                         dt$label <- x
                         return(dt)
                       }
@@ -540,7 +538,6 @@ p1 <- ggplot(dt, aes(x = project, y = label)) +
 # pick example cases and show more detailed LF activation 
 # top examples by clinical factor type
 # top 5 variables per clinical factor 
-
 top <- clin.stats[padj < 0.05,.SD[which.min(padj)], by = label][order(padj),.SD[which.min(padj)],by = project]
 plots <- sapply(simplify = FALSE, 1:4, function(i) {
   pr <- top$project[i]
@@ -549,22 +546,22 @@ plots <- sapply(simplify = FALSE, 1:4, function(i) {
   factors <- process_clinical_covariates(rownames(M))[[l]]
   M <- M[!is.na(factors),]
   factors <- factors[!is.na(factors)]
-  plot_label_specific_vars(M, factors, string_width = 24)+ #, top_vars = top_vars) + 
+  plot_label_specific_vars(M, factors, string_width = 24)+ 
     labs(title = pr, subtitle = l) + 
     theme(legend.position = 'none')
 })
 
 p2 <- cowplot::plot_grid(plotlist = plots[1:2], nrow = 2, labels = c('B', 'C'))
-p <- cowplot::plot_grid(p1, p2, rel_widths = c(3,2), labels = c('A'))
-print(p)
+Fig <- cowplot::plot_grid(p1, p2, rel_widths = c(3,2), labels = c('A'))
 ggsave(filename = 'clinical_factors.LFs.pdf', p, units = 'in', width = 12, height = 9)
+Figures <- c(Figures, Fig)
 ```
 
 # Predicting MSI status using latent factors
 ```{r msi_stats, fig.width=10, fig.height=8}
 # predict MSI status for pan-gastrointestinal tumors
 # read MSI data
-dataDir <- '/data/local/buyar/pancancer_diagnostics/data/GDCdata_prepared'
+dataDir <- settings$GDCdataDir
 MSI <- do.call(rbind, lapply(projectDict$`pan-gastrointestinal`, function(pr) {
   f <- file.path(dataDir, paste0(pr, '.MSI.tsv'))
   dt <- data.table::fread(f)[,c(2,4)]
@@ -587,13 +584,6 @@ msi_stats <- do.call(rbind, lapply(names(LFs), function(tool) {
   return(res)
 }))
 msi_stats$method <- toupper(gsub('_factors', '', msi_stats$method))
-# with glmnet and error bars 
-# for supplements (includes other tools)
-# p1 <- ggplot(msi_stats, aes(x = method, y = auc)) + 
-#   geom_bar(aes(fill = method), stat = 'identity') + 
-#   geom_errorbar(aes(ymin = auc.lower, ymax = auc.upper), width = 0.2) + 
-#   labs(y = 'AUC',x = '') + theme(legend.title = element_blank()) + 
-#   facet_grid(~ label)
 
 p1 <- ggplot(msi_stats[method == 'MAUI'], aes(x = label, y = auc)) +
   geom_bar(stat = 'identity', aes(fill = label)) + 
@@ -625,12 +615,7 @@ p2.1 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + geom_point(aes(color = as.factor
 p2.2 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + 
   geom_point(aes_string(color = top_lf)) + 
   scale_color_gradient(low = 'gray', high = 'red')
-p2.3 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + geom_point(aes(color = as.factor(cancertype))) + 
-  theme(legend.title = element_blank())
-p2.4 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + geom_point(aes(color = as.factor(subtype))) + 
-  theme(legend.title = element_blank())
 
-print(cowplot::plot_grid(p2.1, p2.2, p2.3, p2.4, ncol = 2, labels = 'AUTO'))
 # top features that contribute to top factors relevant to MSI status prediction
 f <- data.table::fread(file.path(inputDir, 'maui_factors', 
                                paste('pan-gastrointestinal', # project 
@@ -660,10 +645,10 @@ p3 <- ggplot(freq[freq$ind < 5,], aes(x = reorder(rank, ind), y = Freq)) +
   labs(x = paste0("top features contributing to ",top_lf)) 
   
 
-p <- cowplot::plot_grid(p1, p3, p2.1, p2.2, labels = 'AUTO')
-print(p)
-ggsave(filename = 'MSI.status.pdf', p, units = 'in', width = 10, height = 8)
+Fig <- cowplot::plot_grid(p1, p3, p2.1, p2.2, labels = 'AUTO')
+ggsave(filename = 'MSI.status.pdf', Fig, units = 'in', width = 10, height = 8)
 
+Figures <- c(Figures, Fig)
 ```
 
 # Semi-supervised clustering of samples 
@@ -677,26 +662,16 @@ ggsave(filename = 'MSI.status.pdf', p, units = 'in', width = 10, height = 8)
 ```{r semi_supervised_subtypes, fig.width=10, fig.height=12}
 require(survminer)
 require(cluster)
-tcga_subtypes <- process_tcga_subtypes()
-# subtype specific LFs
-get_top_by_label <- function(dt, label.type, topN = 5) {
-  do.call(rbind, lapply(split(dt, dt[,get(label.type)]), function(x) {head(x, topN)}))
-}
-
-pr <- 'pan-gastrointestinal' #'TCGA-BRCA' # 'glioma' 
+pr <- 'pan-gastrointestinal' 
 experiment <- paste0(pr, '.cnv_gex_meth_mut')
 M <- LFs$maui_factors[[experiment]]
 st <- tcga_subtypes[match(rownames(M), bcr_patient_barcode)]$Subtype_Selected
 # find subtype specific LFs 
 dt <- get_factor_specific_variables(M, st)
 
-# use gap statistic to get clusters
 vars <- unique(get_top_by_label(dt[padj < 0.05][order(padj)], 'ref_cl', 3)[['variable']])
-# use gap statistic to find optimum clusters 
-#r1 <- cluster::clusGap(M[,vars], FUNcluster = kmeans, K.max = 20, iter.max = 50, B = 100)
-#plot(r1)
-#k <- cluster::maxSE(r1$Tab[,3], r1$Tab[,4], method = 'firstSEmax', SE.factor = 1)
-k <- length(na.omit(unique(st)))
+
+k <- length(na.omit(unique(st))) # set k to number of known subtypes
 # cluster samples using only subtype specific factors 
 clust <- data.frame(get_kmeans_subtypes(M[,vars], k_vals = k, min_cluster_size = 0))
 
@@ -717,6 +692,8 @@ p3 <- plot_survival(surv, df[,'maui',drop =F])[['plot']] + theme(legend.position
 p4 <- plot_survival(surv, df[,'tcga',drop =F])[['plot']] + theme(legend.position = 'none') + labs(y = 'Progression Free Survival')
 
 # use hallmark gene sets to annotate cluster specific functions
+# TODO: update this to point to /data/local/buyar/arcas/subtyping_paper/data/geneset_scores/singscore
+# and remove paths from script (put it in settings.yaml)
 scores <- t(readRDS('/data/local/buyar/pancancer_diagnostics/data/geneset_scores/msigdb_hallmarks/TCGA.ssgsea_all.RDS'))
 S <- scores[intersect(rownames(M), rownames(scores)),]
 clust$tcga <- tcga_subtypes[match(rownames(clust), bcr_patient_barcode)]$Subtype_Selected
@@ -732,13 +709,13 @@ h2 <- plot_label_specific_vars(S, clust[rownames(S), 2],
                               top_vars_per_label = 2)
 
 # altogether
-P <-  cowplot::plot_grid(p1, p2, p3, p4, h1$gtable, h2$gtable, 
+Fig <-  cowplot::plot_grid(p1, p2, p3, p4, h1$gtable, h2$gtable, 
                          labels = 'AUTO', ncol = 2)
-print(P)
 ggsave(filename = paste0('semi_supervised.clustering.', experiment,'.pdf'), 
-       P, units = 'in', 
+       Fig, units = 'in', 
        width = 10, height = 12)
 
+Figures <- c(Figures, Fig)
 ```
 
 ## Clustering informed by survival outcomes
@@ -746,8 +723,7 @@ ggsave(filename = paste0('semi_supervised.clustering.', experiment,'.pdf'),
 Pick survival-predictive LFs and cluster samples based on those
 ```{r semi_supervised_survival, fig.width=10, fig.height=12}
 # factors to use in the model
-clin_factors <- c('age_at_initial_pathologic_diagnosis', 'gender', 'ajcc_pathologic_tumor_stage', 
-                  'PFI', 'PFI.time')
+clin_factors <- c('age_at_initial_pathologic_diagnosis', 'gender', 'ajcc_pathologic_tumor_stage')
 
 experiments <- grep('^TCGA-.*.cnv_gex_meth_mut', names(LFs$maui_factors), value = T)
 cl <- parallel::makeCluster(20)
@@ -756,13 +732,12 @@ prog.clust <- pbapply::pbsapply(cl = cl, simplify = F, experiments,
                                 function(experiment){
     require(data.table)
     require(survminer)
-    source('/data/local/buyar/arcas/subtyping_paper/src/common_functions.R')
+    source(settings$utility_script)
     message(experiment)
     M <- LFs$maui_factors[[experiment]]
     # get clinical factors for the patients in matrix
     clin <- process_clinical_covariates(rownames(M))
-    clin <- get_surv_df(surv, clin[,intersect(colnames(clin), clin_factors),drop = F])
-    res <- get_prognostic_covariates(clin, M)
+    res <- get_prognostic_covariates(surv, clin, M, 'PFI', 'PFI.time')
     # now cluster samples based on only survival predictive factors
     prog_lfs <- unique(res$variable)
     if(length(prog_lfs) < 2) {
@@ -807,21 +782,18 @@ p1 <- ggplot(stats, aes(x = cancertype, y = -log10(pval))) +
   coord_flip() + 
   scale_fill_brewer(type = 'qual', palette = 6) 
 
-# use hallmark gene sets to annotate cluster specific functions
-#scores <- t(readRDS('/data/local/buyar/pancancer_diagnostics/data/geneset_scores/msigdb_hallmarks/TCGA.ssgsea_all.RDS'))
-
 # use canonical pathways to annotate prognostic groups
+# TODO: update this to point to /data/local/buyar/arcas/subtyping_paper/data/geneset_scores/singscore
+# and don't use hard-coded paths 
 scores <- t(readRDS('/data/local/buyar/pancancer_diagnostics/data/geneset_scores/msigdb_canonical_pathways/ssgsea.canonical_pathways.RDS'))
 
-
-# scores geneset scores
-# M survival predictive LF matrix
+# scores: geneset scores
+# M: survival predictive LF matrix
 # maui_clust: best survival prognostic clustering of M 
 plot_clusts <- function(M, maui_clust, scores) {
   df <- plot_tsne(M, as.factor(maui_clust[,1]), returnData = T)
   colnames(df)[3] <- 'maui'
-  #df$tcga <- tcga_subtypes[match(rownames(df), bcr_patient_barcode)]$Subtype_Selected
-  
+
   p1 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + 
     geom_point(aes(color = maui)) +
     geom_text_repel(data = get_centroid(df[,1:2], df$maui), 
@@ -865,13 +837,14 @@ maui_clust <- prog.clust[[e]]$prog.clust
 S <- scores[intersect(rownames(M), rownames(scores)),]
 P <- plot_clusts(M, maui_clust, S)
 
-Pc <- cowplot::plot_grid(p1, plot_grid(P$p1, P$p2, nrow = 1, labels = c('B', 'C')), 
+Fig <- cowplot::plot_grid(p1, plot_grid(P$p1, P$p2, nrow = 1, labels = c('B', 'C')), 
                    P$h1$gtable, nrow = 3, labels = c('A', '', 'D'))
 
-print(Pc)
 ggsave(filename = paste0('semi_supervised.prognostic.clustering.', experiment,'.pdf'), 
-       Pc, units = 'in', 
+       Fig, units = 'in', 
        width = 10, height = 12)
+
+Figures <- c(Figures, Fig)
 
 ```
 
