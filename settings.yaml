@@ -1,0 +1,77 @@
+## folder with prepared GDC data 
+GDCdataDir: /data/local/buyar/pancancer_diagnostics/data/GDCdata_prepared
+## script with useful functions 
+utility_script: /data/local/buyar/arcas/subtyping_paper/src/common_functions.R
+## ensembl to hgnc mapping object
+ens2hgnc: /data/local/buyar/datasets/ens2hgnc.RDS
+## curated survival/clinical data
+surv: /data/local/buyar/pancancer_diagnostics/data/GDCdata_processed2/TCGA.surv.RDS
+## clinical data 
+clin: /data/local/buyar/pancancer_diagnostics/data/GDCdata_processed2/TCGA.clin.RDS
+## project dictionary (a mapping of project names to list of tcga cancer types)
+projectDict: /data/local/buyar/arcas/subtyping_paper/data/projects.dict.yaml
+## msigdb gene sets to use for selecting features
+geneset: /data/local/Projects/AAkalin_Cancer/DataBase/GeneSets/msigdb/canonical_pathways.v7.1.symbols.gmt
+
+# how to select features 
+features:
+  # whether features should be only selected from the given gene sets 
+  use_geneset: FALSE 
+  topN: 1000 # features will be sorted by variance and top features will be selected
+# folder to write the assays to 
+assay_output: 
+  folder: assays
+  printCSV: TRUE # whether to print the assays as CSV files
+  printRDS: TRUE # whether to print the assays as RDS files
+# whether to correct for batches (only applies to gene expression data)
+correctBatches: FALSE 
+datatypes: 
+  - cnv
+  - gex
+  - mut
+  - meth
+# which file extension to use for different data types 
+# gex options: gex_raw, gex.fpkm
+# cnv options: 
+datatype_flavors: 
+  gex: gex.fpkm 
+datatype_combinations:
+  - cnv
+  - mut
+  - gex
+  - meth
+  - cnv,gex,mut
+  - cnv,gex,mut,meth
+# path to projects dictionary
+# TCGA projects with at least 100 patients with all data types (mut/gex/cnv/meth)
+# at least 10 normal gex samples coming from at least two TSS
+projects:
+   # - nsclc
+   # - glioma
+   # - TCGA-BRCA
+   # - pan-gastrointestinal
+   # - TCGA-SKCM
+   # - colorectal
+    - pancancer
+   # - pan-squamous
+   # - pan-kidney
+   # - TCGA-BLCA
+    - TCGA-COAD
+   # - TCGA-ESCA
+   # - TCGA-HNSC
+   # - TCGA-KIRC
+   # - TCGA-KIRP
+   # - TCGA-LIHC
+   # - TCGA-LUAD
+   # - TCGA-LUSC
+   # - TCGA-PRAD
+   # - TCGA-STAD
+   # - TCGA-THCA
+   # - TCGA-UCEC
+   # - TCGA-CESC
+   # - TCGA-LGG
+   # - TCGA-PAAD
+   # - TCGA-PCPG
+   # - TCGA-SARC
+   # - TCGA-TGCT
+   # - TCGA-THYM
