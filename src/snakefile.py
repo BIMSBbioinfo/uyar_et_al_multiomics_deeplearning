@@ -20,7 +20,7 @@ rule all:
 
 rule run_mcia:
     input:
-        os.path.join(ASSAYDIR, "{assay}.csv")
+        os.path.join(ASSAYDIR, "{assay}.RDS")
     output:
         os.path.join(OUTDIR, 'mcia_factors', "{assay}.mcia_factors.csv"),
         os.path.join(OUTDIR, 'mcia_factors', "{assay}.mcia_factors.feature_weights.csv")
@@ -28,7 +28,7 @@ rule run_mcia:
     params:
         script = os.path.join(SRCDIR, 'run_MCIA.R')
     shell:
-        "bash {params.script} {input} {output[0]} > {log} 2>&1"
+        "{RSCRIPT} {params.script} {input} {output[0]} > {log} 2>&1"
 
 rule run_maui:
     input:
