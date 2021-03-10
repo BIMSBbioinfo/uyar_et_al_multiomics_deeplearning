@@ -1,7 +1,7 @@
 
 import os
-ASSAYDIR = '/data/local/buyar/arcas/subtyping_paper/pancancer/assays'
-SRCDIR = '/data/local/buyar/arcas/subtyping_paper/src'
+ASSAYDIR = '/data/local/buyar/arcas/pancancer_multiomics_manuscript/assays' 
+SRCDIR = '/data/local/buyar/arcas/pancancer_multiomics_manuscript/src' 
 ASSAYS = set([os.path.splitext(f)[0] for f in os.listdir(ASSAYDIR) if re.match(r'.*\.csv$', f)])
 RSCRIPT = '/opt/R-4.0.2/lib64/R/bin/Rscript'
 OUTDIR = 'output'
