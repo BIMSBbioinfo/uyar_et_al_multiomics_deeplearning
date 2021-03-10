@@ -41,10 +41,13 @@ pbapply::pblapply(cl = cl, projects, function(pr) {
   source(settings$utility_script)
   message(date(), " => Preparing assays for project ", pr, " with cancer types ", paste(projectDict[[pr]], collapse = ',') , 
           " for data types ",paste(settings$datatypes, collapse = ','))
-  dataList <- prepareData(dataDir = dataDir, clin = surv, correctBatchEffects = settings$correctBatches, 
-                          topN = settings$features$topN, GOI = GOI, TCGA_Disease_IDs = projectDict[[pr]], 
+  dataList <- prepareData(dataDir = dataDir, clin = surv, 
+                          correctBatchEffects = settings$correctBatches, 
+                          topN = settings$features$topN, GOI = GOI, 
+                          TCGA_Disease_IDs = projectDict[[pr]], 
                           datatypes = settings$datatypes, 
-                          gex_flavor = settings$datatype_flavors$gex) 
+                          gex_flavor = settings$datatype_flavors$gex, 
+                          cnv_flavor = settings$datatype_flavors$cnv) 
   # save assays 
   lapply(sapply(settings$datatype_combinations, function(x) strsplit(x, ',')), 
          function(datatypes) {
