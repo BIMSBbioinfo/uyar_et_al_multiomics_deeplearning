@@ -830,15 +830,21 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
       } else if (cnv_flavor == 'cnv_gistic') {
         cnv <- dat
       }
-      
       return(cnv)
     })
     common_features <- Reduce(intersect, lapply(cnv, rownames))
     cnv <- do.call(cbind, lapply(cnv, function(x) x[common_features,]))
     
     if(!is.null(GOI)) {cnv <- cnv[intersect(GOI, rownames(cnv)),]}
-    # get top features # pick features which are most often gained/lost
-    selected <- head(names(sort(apply(cnv, 1, function(x) sum(x == 0)))), topN) 
+    
+    selected <- NULL
+    if(cnv_flavor == 'cnv') {
+      # get top features # pick features which are most often gained/lost
+      selected <- head(names(sort(apply(cnv, 1, function(x) sum(x == 0)))), topN) 
+    } else if(cnv_flavor == 'cnv_gistic') {
+      # pick top features by variance in gistic scores
+      selected <- head(names(sort(apply(cnv, 1, var), decreasing = T)), topN) 
+    }
     cnv <- cnv[selected,]
     rownames(cnv) <- paste0('cnv.', rownames(cnv))
     
