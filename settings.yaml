@@ -1,9 +1,9 @@
 ## folder with prepared GDC data 
 GDCdataDir: /data/local/buyar/pancancer_diagnostics/data/GDCdata_prepared
 ## script with useful functions 
-utility_script: /data/local/buyar/arcas/subtyping_paper/src/common_functions.R
+utility_script: /data/local/buyar/arcas/pancancer_multiomics_manuscript/src/common_functions.R
 ## ensembl to hgnc mapping object
-ens2hgnc: /data/local/buyar/datasets/ens2hgnc.RDS
+ens2hgnc: /data/local/buyar/arcas/subtyping_paper/data/ens2hgnc.RDS
 ## curated survival/clinical data
 surv: /data/local/buyar/pancancer_diagnostics/data/GDCdata_processed2/TCGA.surv.RDS
 ## clinical data 

@@ -722,10 +722,12 @@ parseMAF <- function(project = 'TCGA-BRCA',
 # project: Name of TCGA project (e.g TCGA-BRCA)
 # topN: top feature count to pick. For mutations, it is by sum of mutations, for others it is by coefvar.
 # gex_flavor: can be gex_raw or gex.fpkm
+# cnv_flavor: can be "cnv" or "cnv_gistic"
 prepareData <- function(dataDir, clin, correctBatchEffects = TRUE, 
                         topN = 1000, GOI = NULL,
                         TCGA_Disease_IDs, datatypes = c('gex', 'cnv', 'mut', 'meth'),
-                        gex_flavor) {
+                        gex_flavor, 
+                        cnv_flavor) {
   patientIDs <- unique(clin[project %in% TCGA_Disease_IDs]$bcr_patient_barcode)
   dataList <- list('assay' = list(), 
                    'batch' = list())
@@ -821,9 +823,14 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     # get CNV data
     cnv <- lapply(TCGA_Disease_IDs, function(pr) {
       message(date(), " => importing cnv data for ",pr)
-      df.tibble <- readRDS(file.path(dataDir, paste0(pr, '.cnv.RDS')))
-      cnv <- as.matrix(df.tibble[,-c(1:3)])
-      rownames(cnv) <-  gsub("\\.[0-9]+$", "", df.tibble$`Gene Symbol`)
+      dat <- readRDS(file.path(dataDir, paste(pr, cnv_flavor, 'RDS', sep = '.')))
+      if(cnv_flavor == 'cnv') {
+        cnv <- as.matrix(dat[,-c(1:3)])
+        rownames(cnv) <-  gsub("\\.[0-9]+$", "", dat$`Gene Symbol`)
+      } else if (cnv_flavor == 'cnv_gistic') {
+        cnv <- dat
+      }
+      
       return(cnv)
     })
     common_features <- Reduce(intersect, lapply(cnv, rownames))
