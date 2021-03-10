@@ -8,7 +8,7 @@ outFile <- args[2] # path to output file
 
 A <- readRDS(Assays)
 
-nf <- ifelse(ncol(A[[1]]) > 1000, 50, 20) # round(max(10, sqrt(ncol(A[[1]]))))
+nf <- 20
 message(date(), " => Running MCIA looking for ",nf," factors")
 mcoin <- mcia(A, cia.nf=nf)
 
