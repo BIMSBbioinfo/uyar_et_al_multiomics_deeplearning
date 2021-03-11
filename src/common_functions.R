@@ -1215,3 +1215,24 @@ remove_redundant_variables <- function(M, perc = 99, cutoff = NULL) { #, cutoff 
   return(M)
 }
 
+compute_AMI <- function(M, k, target_labels) {
+  df <-  data.frame(get_kmeans_subtypes(M, k_vals = k, 0))
+  colnames(df) <- 'cluster'
+  ami <- aricode::AMI(df$cluster, target_labels)
+  return(ami)
+}
+
+# geneSetScoresFolder: path to folder with gene set scores
+# annotation: subfolder to import
+import_geneset_scores <- function(geneSetScoresFolder, annotation = 'msigdb_hallmarks') {
+  # use hallmark gene sets to annotate cluster specific functions
+  files <- dir(file.path(geneSetScoresFolder, annotation), 
+               '.scores.csv', full.names = T)
+  scores <- do.call(rbind, sapply(simplify = F, files, function(x) {
+    dt <- data.table::fread(x)
+    M <- as.matrix(dt[,-1])
+    rownames(M) <- dt$V1
+    return(M)
+  }))
+  return(scores)
+}
