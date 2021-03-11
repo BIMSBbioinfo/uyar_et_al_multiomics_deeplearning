@@ -37,41 +37,37 @@ datatype_flavors:
   gex: gex.fpkm
   cnv: cnv_gistic 
 datatype_combinations:
-  - cnv
-  - mut
-  - gex
-  - meth
   - cnv,gex,mut,meth
 # path to projects dictionary
 # TCGA projects with at least 100 patients with all data types (mut/gex/cnv/meth)
 # at least 10 normal gex samples coming from at least two TSS
 projects:
-   # - nsclc
-   # - glioma
-   # - TCGA-BRCA
-   # - pan-gastrointestinal
    # - TCGA-SKCM
-   # - colorectal
+    - nsclc
+    - glioma
+    - TCGA-BRCA
+    - pan-gastrointestinal
+    - colorectal
     - pancancer
-   # - pan-squamous
-   # - pan-kidney
-   # - TCGA-BLCA
+    - pan-squamous
+    - pan-kidney
+    - TCGA-BLCA
     - TCGA-COAD
-   # - TCGA-ESCA
-   # - TCGA-HNSC
-   # - TCGA-KIRC
-   # - TCGA-KIRP
-   # - TCGA-LIHC
-   # - TCGA-LUAD
-   # - TCGA-LUSC
-   # - TCGA-PRAD
-   # - TCGA-STAD
-   # - TCGA-THCA
-   # - TCGA-UCEC
-   # - TCGA-CESC
-   # - TCGA-LGG
-   # - TCGA-PAAD
-   # - TCGA-PCPG
-   # - TCGA-SARC
-   # - TCGA-TGCT
-   # - TCGA-THYM
+    - TCGA-ESCA
+    - TCGA-HNSC
+    - TCGA-KIRC
+    - TCGA-KIRP
+    - TCGA-LIHC
+    - TCGA-LUAD
+    - TCGA-LUSC
+    - TCGA-PRAD
+    - TCGA-STAD
+    - TCGA-THCA
+    - TCGA-UCEC
+    - TCGA-CESC
+    - TCGA-LGG
+    - TCGA-PAAD
+    - TCGA-PCPG
+    - TCGA-SARC
+    - TCGA-TGCT
+    - TCGA-THYM
