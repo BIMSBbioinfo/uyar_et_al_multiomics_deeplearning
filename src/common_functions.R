@@ -850,8 +850,14 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     
     # remove normal samples
     cnv <- subsetAssayData(cnv, patientIDs, replaceIDs = FALSE)
-    # remove patients that are all zeros
-    cnv <- cnv[,names(which(apply(cnv, 2, function(x) sum(x != 0)) > 0))]
+    if(cnv_flavor == 'cnv') {
+      # remove patients that are all zeros
+      cnv <- cnv[,names(which(apply(cnv, 2, function(x) sum(x != 0)) > 0))]
+    } else if(cnv_flavor == 'cnv_gistic') {
+      # remove patients for whom when data is scaled sd equals to NA
+      keep <- names(which(!is.na(apply(scale(cnv), 2, sd))))
+      cnv <- cnv[,keep]
+    }
     
     # get batch info
     batches <- getBatchTable(colnames(cnv))
