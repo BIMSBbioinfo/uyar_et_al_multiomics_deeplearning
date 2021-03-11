@@ -18,7 +18,7 @@ library(ggpubr)
 library(cowplot)
 theme_set(ggpubr::theme_pubclean())
 
-# todo: move this to settings file
+# todo: move paths to settings file
 inputDir <- '/data/local/buyar/arcas/pancancer_multiomics_manuscript/output'
 geneSetScoresFolder <- '/data/local/buyar/arcas/subtyping_paper/data/geneset_scores/singscore'
 FigureFolder <- '/data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas'
@@ -30,7 +30,7 @@ tcga_subtypes <- process_tcga_subtypes()
 
 Figures <- list() # accummulate all figures in this
 SuppFigures <- list() # accumulate all supplementary figures in this
-
+Legends <- list() # figure legend text
 TOOLS <- c('pca_factors', 'maui_factors', 'mofa_factors', 'mcia_factors')
 
 fig_count <- 0
@@ -223,6 +223,7 @@ fig.name <- paste0('Figure', fig_count, '.pancancer_cancer_type_prediction.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name), 
               plot = Fig, units = 'in', width = 12, height = 9)
+Legends[[fig_count]] <- "Predictive power of latent factors in distinguishing cancer types. A-B) comparing maui with PCA/MOFA/MCIA. AUC: Area under the ROC curve computed on the test dataset (30% of held-out data) trained on 70% of the dataset using a Random Forest model. Each point represents one cancer type (pairwise one-sided Wilcoxon test on AUCs, alternative = maui AUC is not greater than others) C) Adjusted Mutual Information (AMI) value computed by comparing unsupervised clustering labels (k-means algorithm, k set to 21) with the cancer types. D) Top maui LFs detected per cancer type. Size/color/opacity of the points represent the average neural activation value of the LF for the corresponding cancer type samples. E) Percentage of top feature types contributing to top predictive maui latent factor per cancer type."
 
 # predictability of subtypes using pancancer LFs
 pancancer_subtype_stats <- predict_labels(LFs, surv, tcga_subtypes, 'pancancer', 
@@ -355,6 +356,7 @@ names(Figures)[fig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name),        
        plot = Fig, units = 'in', 
        width = 10, height = 8)
+Legends[[fig_count]] <- "Comparison of unsupervised clustering performances based on cluster homogeneity (Silhouette) in A) and cluster stability (Average Proportion of Non-Overlap (APN) in B). Each point represents a clustering score for 132 k-means clustering results (21 cancer types x for 6 different values of k from 3 to 8) based on the top 10 LFs/PCs derived from each tool. C) Same as in panels A and B), but split by the value of k used in clustering."
 ```
 
 
@@ -483,6 +485,7 @@ fig.name <- paste0('Figure', fig_count, '.surv.Cindex_improv.hazard_ratio.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, width = 12, height = 14, units = 'in')
+Legends[[fig_count]] <- "Using MAUI LFs for survival prediction. A) Harrell’s C-index computed using only clinical factors (tumor stage + age + gender) or using clinical factors along with survival-predictive MAUI LFs. B) Hazard ratios of top LFs picked for each cancer adjusted for clinical factors (tumor stage + age + gender). Kaplan-Meier survival curves adjusted for clinical factors (tumor stage + age + gender) stratified by the neural activation values of top survival-predictive LFs per cancer."
 ```
 
 
@@ -557,6 +560,7 @@ fig.name <- paste0('Figure', fig_count, '.clinical_factors.LFs.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, units = 'in', width = 12, height = 9)
+Legends[[fig_count]] <- "A) Top significant (padj < 0.05) clinical factor-associated LFs per cancer type. B) Example case: top LFs associated with each histological subtype of TCGA-SARC. C) Example case: top LFs associated with each histological grade of TCGA-HNSC."
 ```
 
 ```{r msi_stats, fig.width=10, fig.height=8}
@@ -657,6 +661,7 @@ fig.name <- paste0('Figure', fig_count, '.MSI.status.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, units = 'in', width = 10, height = 8)
+Legends[[fig_count]] <- "Predicting MSI status of pan-gastrointestinal tumors using MAUI latent factors. A) AUC values for predicting MSI status using MAUI LFs B) Top features that contribute to MAUI latent factor (‘LF95’) that is the most predictive latent factor in distinguishing samples with high microsatellite instability from the rest. C) tSNE plots of samples generated using top MSI-predictive LFs (5 LF per MSI class) colored by MSI status D) tSNE plots of samples colored by MAUI latent factor (‘LF95’) which is most predictive of MSI-H samples."
 ```
 
 
@@ -726,6 +731,7 @@ names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        Fig, units = 'in', 
        width = 10, height = 12)
+Legends[[fig_count]] <- "Clustering of pan-gastrointestinal tumors guided by TCGA subtypes. Subtype specific MAUI LFs are used to cluster the samples, which yields better survival curves as shown in C,D). Clusters are annotated using pathway activity scores (top cluster associated cancer hallmarks)."
 ```
 
 ```{r semi_supervised_survival, fig.width=10, fig.height=12}
@@ -853,21 +859,22 @@ Fig <- cowplot::plot_grid(p1, plot_grid(P$p1, P$p2, nrow = 1, labels = c('B', 'C
 fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
 fig.name <- paste0('Figure', fig_count, '.semi_supervised.prognostic.clustering.', experiment,'.pdf')
-names(Figures[fig.count]) <- fig.name
+names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, units = 'in', 
        width = 10, height = 12)
-
+Legends[[fig_count]] <- "Log-rank test of prognostic subtypes by MAUI and existing TCGA subtypes. B) tSNE plot of MAUI LFs that are predictive of survival outcomes for TCGA-UCEC. C) Kaplan-Meier curve of the best/worst surviving prognostic MAUI clusters D) Biological pathway scores that distinguish best/worst surviving clusters."
 ```
 
 ```{r print_figures, results='asis', include=TRUE, fig.width=10, fig.height=11}
 base_url <- 'https://bimsbstatic.mdc-berlin.de'
 for(i in 1:length(Figures)) {
   fig.url <- gsub("/data/bimsbstatic/public", base_url, file.path(FigureFolder, names(Figures)[i]))
-  cat("# Figure",i)
+  cat("# Figure",i,"[high-res image](",fig.url,")\n\n")
   print(Figures[[i]])
-  cat("High-res image:",fig.url,"\n\n")
+  cat("\n Figure",i,":",Legends[[i]],"\n\n")
 }
 ```
 
+`r date()`
 
