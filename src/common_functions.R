@@ -1034,16 +1034,19 @@ process_clinical_covariates <- function(patientIDs) {
 
 # build a cox model for each variable along correcting for existing clinical variables
 # return list of covariates that are significant 
-get_prognostic_covariates <- function(surv, clin, explored_covariates, 
+get_prognostic_covariates <- function(surv, clin = NULL, explored_covariates, 
                                       event_col = 'PFI', duration_col = 'PFI.time') {
   require(survival)
   res <- do.call(rbind, pbapply::pblapply(colnames(explored_covariates), function(v) {
     #message(v,"\n")
     x <- explored_covariates[,v,drop = F]
-    dat <- merge(clin, x, by = 'row.names')
-    rownames(dat) <- dat$Row.names
-    dat$Row.names <- NULL
-    
+    if(!is.null(clin)) {
+      dat <- merge(clin, x, by = 'row.names')
+      rownames(dat) <- dat$Row.names
+      dat$Row.names <- NULL
+    } else {
+      dat <- data.frame(x)
+    }
     dat <- cbind(dat, data.frame('status' = surv[match(rownames(dat), bcr_patient_barcode)][,get(event_col)], 
                                'time' = surv[match(rownames(dat), bcr_patient_barcode)][,get(duration_col)]))
     dat <- dat[!is.na(dat$time),]
@@ -1053,12 +1056,7 @@ get_prognostic_covariates <- function(surv, clin, explored_covariates,
     s <- summary(cox1)
     pval <- as.numeric(s$coefficients[v,][5])
     cindex <- s$concordance[['C']]
-    # build a model without the covariate and compute cindex 
-    cox2 <- coxph(Surv(time, status) ~ ., 
-                  data = subset(dat, select = c(colnames(clin), 'status', 'time')))
-    s2 <- summary(cox2)
-    cindex2 <- s2$concordance[['C']]
-    return(data.table('variable' = v, 'pval' = pval, 'cindex' = cindex, 'cindex_change' = cindex - cindex2))
+    return(data.table('variable' = v, 'pval' = pval, 'cindex' = cindex))
   }))
   if(!is.null(res)) {
     res <- res[pval < 0.05]
