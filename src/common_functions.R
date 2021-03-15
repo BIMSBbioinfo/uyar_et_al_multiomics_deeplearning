@@ -754,6 +754,7 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     # reorder features and concatenate columns
     mut <- do.call(cbind, lapply(mut, function(x) x[common_features,]))
     if(!is.null(GOI)) {mut <- mut[intersect(rownames(mut), GOI),]}
+    
     # select genes with most non-zero samples
     selected <- head(names(sort(apply(mut, 1, function(x) sum(x > 0)), decreasing = T)), topN)
     
@@ -793,6 +794,7 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     
     # subset by features
     if (!is.null(GOI)) {gex <- gex[intersect(rownames(gex), GOI),]}
+    
     gex <- subset_features_by_variance(gex, topN = topN)
     rownames(gex) <- paste0('gex.', rownames(gex))
     
@@ -1200,14 +1202,27 @@ plot_label_specific_vars <- function(M, labels, top_vars_per_label = 1,
 }
 
 # given a matrix, remove variables that are redundant (Based on correlation cut-off)
-remove_redundant_variables <- function(M, perc = 99, cutoff = NULL) { #, cutoff = 0.7) {
+# samples on the rows, variables on the columns
+# downsize_byTopVar : integer value. If set, the top most variable features are first selected.
+remove_redundant_variables <- function(M, perc = 99, cutoff = NULL, downsize_byTopVar = NULL) { #, cutoff = 0.7) {
+  if(!is.null(downsize_byTopVar)) {
+    message(date()," => selecting top ",downsize_byTopVar, " features by variance first")
+    M <- t(subset_features_by_variance(t(M), downsize_byTopVar))
+  }
+  message(date()," => computing pairwise correlations")
+  x <- Rfast::cora(M)
   if(is.null(cutoff)) {
+    message(date(), " => looking for correlation cutoff...")
     # define cutoff based on correlation distribution, remove those above 99% 
-    x <- cor(M)
-    cutoff <- quantile(x[upper.tri(x)], 1:100/100)[[perc]]
+    # sample features for efficiency
+    s <- sample(1:nrow(x), 1000)
+    xs <- x[s,s]
+    cutoff <- quantile(xs[upper.tri(xs)], 1:100/100)[[perc]]
+    message(date(), " => setting correlation cut-off to ",cutoff, " at ",perc,"th percentile")
   }
   require(caret)
-  hc = findCorrelation(cor(M), cutoff=cutoff, names = F)
+  message(date(), " => subsetting matrix to remove redundant variables")
+  hc = findCorrelation(x, cutoff=cutoff, names = F)
   hc = sort(hc)
   M <- M[,-c(hc)]
   return(M)
