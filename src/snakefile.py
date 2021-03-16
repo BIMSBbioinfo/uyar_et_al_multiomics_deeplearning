@@ -1,10 +1,11 @@
 
 import os
-ASSAYDIR = '/data/local/buyar/arcas/pancancer_multiomics_manuscript/assays' 
-SRCDIR = '/data/local/buyar/arcas/pancancer_multiomics_manuscript/src' 
+
+ASSAYDIR = config['assay_output']['folder'] 
+SRCDIR = config['utility_script'] 
 ASSAYS = set([os.path.splitext(f)[0] for f in os.listdir(ASSAYDIR) if re.match(r'.*\.csv$', f)])
 RSCRIPT = '/opt/R-4.0.2/lib64/R/bin/Rscript'
-OUTDIR = 'output'
+OUTDIR = config['pipeline_output']
 LOG_DIR = os.path.join(OUTDIR, "logs")
 
 rule all:
