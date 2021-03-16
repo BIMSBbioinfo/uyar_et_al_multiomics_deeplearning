@@ -755,6 +755,9 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     mut <- do.call(cbind, lapply(mut, function(x) x[common_features,]))
     if(!is.null(GOI)) {mut <- mut[intersect(rownames(mut), GOI),]}
     
+    # remove redundant features
+    mut <- t(remove_redundant_variables(t(mut), perc = 99, downsize_byTopVar = 15000))
+    
     # select genes with most non-zero samples
     selected <- head(names(sort(apply(mut, 1, function(x) sum(x > 0)), decreasing = T)), topN)
     
@@ -794,6 +797,10 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     
     # subset by features
     if (!is.null(GOI)) {gex <- gex[intersect(rownames(gex), GOI),]}
+    
+    # remove redundant features
+    gex <- t(remove_redundant_variables(t(gex), perc = 99, downsize_byTopVar = 15000))
+    
     
     gex <- subset_features_by_variance(gex, topN = topN)
     rownames(gex) <- paste0('gex.', rownames(gex))
@@ -841,9 +848,11 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     
     selected <- NULL
     if(cnv_flavor == 'cnv') {
+      # TODO: consider removing highly redundant ones
       # get top features # pick features which are most often gained/lost
       selected <- head(names(sort(apply(cnv, 1, function(x) sum(x == 0)))), topN) 
     } else if(cnv_flavor == 'cnv_gistic') {
+      # TODO: consider removing highly redundant ones
       # pick top features by variance in gistic scores
       selected <- head(names(sort(apply(cnv, 1, var), decreasing = T)), topN) 
     }
@@ -887,6 +896,9 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     })
     common_features <- Reduce(intersect, lapply(meth, rownames))
     meth <- do.call(cbind, lapply(meth, function(x) x[common_features,]))
+    
+    # remove redundant features
+    meth <- t(remove_redundant_variables(t(meth), perc = 99, downsize_byTopVar = 15000))
     
     # get top features by variance
     meth <- subset_features_by_variance(meth, topN = topN)
@@ -1215,8 +1227,11 @@ remove_redundant_variables <- function(M, perc = 99, cutoff = NULL, downsize_byT
     message(date(), " => looking for correlation cutoff...")
     # define cutoff based on correlation distribution, remove those above 99% 
     # sample features for efficiency
-    s <- sample(1:nrow(x), 1000)
-    xs <- x[s,s]
+    xs <- x
+    if(nrow(x) > 5000) {
+      s <- sample(1:nrow(x), 5000)
+      xs <- x[s,s]
+    }
     cutoff <- quantile(xs[upper.tri(xs)], 1:100/100)[[perc]]
     message(date(), " => setting correlation cut-off to ",cutoff, " at ",perc,"th percentile")
   }
