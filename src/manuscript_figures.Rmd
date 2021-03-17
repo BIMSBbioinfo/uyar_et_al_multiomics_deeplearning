@@ -17,21 +17,21 @@ library(ggrepel)
 library(ggpubr)
 library(cowplot)
 theme_set(ggpubr::theme_pubclean())
-
-# todo: move paths to settings file
-inputDir <- '/data/local/buyar/arcas/pancancer_multiomics_manuscript/output'
 geneSetScoresFolder <- '/data/local/buyar/arcas/subtyping_paper/data/geneset_scores/singscore'
 FigureFolder <- '/data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas'
+
+inputDir <- settings$pipeline_output
 assay_dir <- settings$assay_output$folder
 surv <- do.call(rbind, readRDS(settings$surv))
 projectDict <- sapply(yaml::read_yaml(settings$projectDict), 
                       function(x) gsub(' ', '', unlist(strsplit(x, ','))))
 tcga_subtypes <- process_tcga_subtypes()
 
+TOOLS <- c('pca_factors', 'maui_factors', 'mofa_factors', 'mcia_factors')
+
 Figures <- list() # accummulate all figures in this
 SuppFigures <- list() # accumulate all supplementary figures in this
 Legends <- list() # figure legend text
-TOOLS <- c('pca_factors', 'maui_factors', 'mofa_factors', 'mcia_factors')
 
 fig_count <- 0
 supFig_count <- 0
@@ -346,8 +346,60 @@ p3 <- ggplot(dt,
         facet_wrap(~ kv, ncol = 2) +
         labs(title = 'Multi-omics clustering: Silhouette vs APN')
 
-Fig <- plot_grid(plot_grid(p1, p2, labels = 'AUTO', ncol = 1),
-                  p3, ncol = 2, rel_widths = c(2,3), labels = c('','C'))
+# survival prediction accuracy benchmarking
+# find survival-predictive LFs by univariate cox models and use them in RSF
+cl <- parallel::makeCluster(20)
+parallel::clusterExport(cl, varlist = c('LFs', 'experiments', 'settings', 'surv'))
+surv.stats <- do.call(rbind, sapply(simplify = F, names(LFs), function(tool) {
+  message("survival benchmark for ",tool)
+  do.call(rbind, pbapply::pbsapply(cl = cl, simplify = F, experiments, function(experiment) {
+    message(experiment)
+    source(settings$utility_script)
+    require(data.table)
+    require(survminer)
+    M <- LFs[[tool]][[experiment]]
+    if(tool == 'maui_factors') {
+      M <- remove_redundant_variables(M, 99)
+    }
+    dt <- data.table('cindex.pfi' = NA, 'cindex.os' = NA, 'experiment' = experiment, 'method' = tool)
+    # compute pfi stats
+    vars <- get_prognostic_covariates(surv, clin = NULL, explored_covariates = M,
+                                      event_col = 'PFI', duration_col = 'PFI.time')
+    if(!is.null(vars)) {
+      v <- head(vars[order(pval)][pval < 0.05][['variable']], 10)
+      fit <- fit_RSF(surv, M[,v], 1000, 'PFI.time', 'PFI')
+      dt$cindex.pfi <- round(1 - mean(fit$err.rate, na.rm = T), 2)
+    }
+    vars <- get_prognostic_covariates(surv, clin = NULL, explored_covariates = M,
+                                      event_col = 'OS', duration_col = 'OS.time')
+    if(!is.null(vars)) {
+      v <- head(vars[order(pval)][pval < 0.05][['variable']], 10)
+      fit <- fit_RSF(surv, M[,v], 1000, 'OS.time', 'OS')
+      dt$cindex.os <- round(1 - mean(fit$err.rate, na.rm = T), 2)
+    }
+    return(dt)
+  }))
+}))
+parallel::stopCluster(cl)
+
+dt <- melt(surv.stats, measure.vars = c('cindex.pfi', 'cindex.os'))
+dt[is.na(value)]$value <- min(dt$value, na.rm = T) # 
+dt$method <- toupper(gsub("_factors", "", dt$method))
+dt$project <- unlist(sapply(strsplit(dt$experiment, "\\."), function(x) x[1]))
+dt$endpoint <- ifelse(dt$variable == 'cindex.pfi', 'Progression Free Survival', 
+                      'Overall Survival')
+# PCA/MOFA win, compare against PCA
+comps <- lapply(setdiff(unique(dt$method), 'PCA'), function(x) c('PCA', x))
+p4 <- ggboxplot(dt, x = 'method', y = 'value', color = 'method',
+                add = 'jitter', facet.by = 'endpoint') +
+  stat_compare_means(method = 'wilcox.test', paired = TRUE,
+                     comparisons = comps) +
+  labs(y = "Harrel's C-index", x = '') +
+  theme(legend.position = 'none')
+
+Fig <- plot_grid(plot_grid(p1, p2, labels = c('A', 'B'), ncol = 1),
+                 plot_grid(p3, p4, labels = c('C', 'D'), ncol = 1), 
+                 ncol = 2, rel_widths = c(2,3))
 
 fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
@@ -355,8 +407,8 @@ fig.name <- paste0('Figure', fig_count, '.cluster_stability_metrics.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name),        
        plot = Fig, units = 'in', 
-       width = 10, height = 8)
-Legends[[fig_count]] <- "Comparison of unsupervised clustering performances based on cluster homogeneity (Silhouette) in A) and cluster stability (Average Proportion of Non-Overlap (APN) in B). Each point represents a clustering score for 132 k-means clustering results (21 cancer types x for 6 different values of k from 3 to 8) based on the top 10 LFs/PCs derived from each tool. C) Same as in panels A and B), but split by the value of k used in clustering."
+       width = 10, height = 10)
+Legends[[fig_count]] <- "Comparison of unsupervised clustering performances based on cluster homogeneity (Silhouette) in A) and cluster stability (Average Proportion of Non-Overlap (APN) in B). Each point represents a clustering score for 132 k-means clustering results (21 cancer types x for 6 different values of k from 3 to 8) based on the top 10 LFs/PCs derived from each tool. C) Same as in panels A and B), but split by the value of k used in clustering. D) Survival outcome prediction accuracy for 21 cancer types by each tool's top 10 survival-related factors based on Overall Survival or Progression Free Survival endpoints."
 ```
 
 
@@ -664,6 +716,59 @@ ggsave(filename = file.path(FigureFolder, fig.name),
 Legends[[fig_count]] <- "Predicting MSI status of pan-gastrointestinal tumors using MAUI latent factors. A) AUC values for predicting MSI status using MAUI LFs B) Top features that contribute to MAUI latent factor (‘LF95’) that is the most predictive latent factor in distinguishing samples with high microsatellite instability from the rest. C) tSNE plots of samples generated using top MSI-predictive LFs (5 LF per MSI class) colored by MSI status D) tSNE plots of samples colored by MAUI latent factor (‘LF95’) which is most predictive of MSI-H samples."
 ```
 
+```{r}
+# Analysis of non-small-cell lung cancer types (LUSC vs LUAD)
+# reference study: https://www.nature.com/articles/s41598-020-77284-8
+M <- remove_redundant_variables(LFs$maui_factors$nsclc.cnv_gex_meth_mut, perc = 99)
+ct <- surv[match(rownames(M), bcr_patient_barcode)]$project
+
+# find type-specific LFs
+dt <- get_factor_specific_variables(M, ct)
+top_vars <- get_top_by_label(dt[padj < 0.05][order(padj)], 'ref_cl', 10)
+s <- unique(top_vars$variable)
+pheatmap(M[,s], show_rownames = F)
+plot_tsne(M[,s], ct)
+plot_umap(M, ct)
+plot_tsne(M, ct)
+clust <- get_spectral_clusters(M, k_vals = 2:6)
+clin <- process_clinical_covariates(rownames(M))
+prog_vars <- get_prognostic_covariates(surv, clin, M)
+prog.clust <- get_kmeans_subtypes(M[,unique(prog_vars$variable)], k_vals = 2:8, min_cluster_size = 0)
+
+which.min(sapply(colnames(prog.clust), function(x) {
+  plot_survival(surv, prog.clust[,x,drop=F], return_pval = T)
+}))
+
+plot_survival(surv, prog.clust[,'kmeans_3', drop = F])
+plot_survival(surv, data.frame('ct' = ct, row.names = rownames(M)), 
+              'PFI.time', 'PFI')
+
+df <- plot_tsne(M[,unique(prog_vars$variable)], ct, returnData = T)
+df$pfi_subtype <- as.factor(prog.clust[rownames(df),'kmeans_3'])
+
+ggplot(df, aes(x = tSNE1, y = tSNE2)) + 
+  geom_point(aes(color = as.factor(pfi_subtype))) +
+  facet_wrap(~ group, nrow = 1 )
+
+ggplot(df, aes(x = tSNE1, y = tSNE2)) + 
+  geom_point(aes(color = group)) +
+  facet_wrap(~ as.factor(pfi_subtype), nrow = 1 )
+
+scores <- sapply(simplify = F, c('msigdb_hallmarks', 'msigdb_canonical_pathways', 'cancersea'), 
+       function(x) {
+         scores <- import_geneset_scores(geneSetScoresFolder, x)
+         S <- scores[intersect(rownames(M), rownames(scores)),]
+         return(S)
+       })
+
+pathways.prog <- get_factor_specific_variables(scores$cancersea, df$pfi_subtype)[padj < 0.05][order(padj)]
+pathways.ct <- get_factor_specific_variables(scores$cancersea, df$group)[padj < 0.05][order(padj)]
+
+
+get_top_by_label(pathways.ct[padj < 0.05][order(padj)], 'ref_cl', 10)
+
+```
+
 
 ```{r semi_supervised_subtypes, fig.width=10, fig.height=12}
 # Semi-supervised clustering of samples 
@@ -877,4 +982,3 @@ for(i in 1:length(Figures)) {
 ```
 
 `r date()`
-
