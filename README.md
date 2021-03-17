@@ -7,4 +7,5 @@ Configure the experiment using the settings.yaml
 
 2. Run pipeline
 
-> nohup time snakemake -p -s ./src/snakefile.py -j 10 --keep-going
+> time snakemake -p -s ./src/snakefile.py -j 10 --configfile ./settings2.yaml --keep-going
+
