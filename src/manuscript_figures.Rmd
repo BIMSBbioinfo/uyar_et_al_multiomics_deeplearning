@@ -6,7 +6,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = FALSE, cache = TRUE)
 # todo: pass this as argument
 settings <- yaml::read_yaml('/data/local/buyar/arcas/pancancer_multiomics_manuscript/settings.yaml')
 source(settings$utility_script)
@@ -16,6 +16,7 @@ library(pbapply)
 library(ggrepel)
 library(ggpubr)
 library(cowplot)
+library(ggridges)
 theme_set(ggpubr::theme_pubclean())
 geneSetScoresFolder <- '/data/local/buyar/arcas/subtyping_paper/data/geneset_scores/singscore'
 FigureFolder <- '/data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas'
@@ -26,6 +27,8 @@ surv <- do.call(rbind, readRDS(settings$surv))
 projectDict <- sapply(yaml::read_yaml(settings$projectDict), 
                       function(x) gsub(' ', '', unlist(strsplit(x, ','))))
 tcga_subtypes <- process_tcga_subtypes()
+
+ens2hgnc <- readRDS(settings$ens2hgnc)
 
 TOOLS <- c('pca_factors', 'maui_factors', 'mofa_factors', 'mcia_factors')
 
@@ -722,51 +725,76 @@ Legends[[fig_count]] <- "Predicting MSI status of pan-gastrointestinal tumors us
 M <- remove_redundant_variables(LFs$maui_factors$nsclc.cnv_gex_meth_mut, perc = 99)
 ct <- surv[match(rownames(M), bcr_patient_barcode)]$project
 
+res <- predict_cluster_labels_glmnet(M, ct)
+
 # find type-specific LFs
 dt <- get_factor_specific_variables(M, ct)
-top_vars <- get_top_by_label(dt[padj < 0.05][order(padj)], 'ref_cl', 10)
-s <- unique(top_vars$variable)
-pheatmap(M[,s], show_rownames = F)
-plot_tsne(M[,s], ct)
-plot_umap(M, ct)
-plot_tsne(M, ct)
-clust <- get_spectral_clusters(M, k_vals = 2:6)
-clin <- process_clinical_covariates(rownames(M))
-prog_vars <- get_prognostic_covariates(surv, clin, M)
-prog.clust <- get_kmeans_subtypes(M[,unique(prog_vars$variable)], k_vals = 2:8, min_cluster_size = 0)
+top_vars <- get_top_by_label(dt[padj < 0.05][order(padj)], 'ref_cl', 1)
 
-which.min(sapply(colnames(prog.clust), function(x) {
-  plot_survival(surv, prog.clust[,x,drop=F], return_pval = T)
-}))
+# roc curves for predicting lung cancer types
+rocs <- predict_cluster_labels_glmnet(M, ct, returnROC = TRUE)
+aucs <- sapply(rocs, pROC::auc)
+p1 <- pROC::ggroc(rocs, size = 1)
+p1$data$name <- paste0(p1$data$name, " (AUC=", round(aucs[p1$data$name], 3),")")
+p1 <- p1 + geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), color="grey", linetype="dashed") +
+  theme(legend.title = element_blank(), legend.direction = 'vertical')
 
-plot_survival(surv, prog.clust[,'kmeans_3', drop = F])
-plot_survival(surv, data.frame('ct' = ct, row.names = rownames(M)), 
-              'PFI.time', 'PFI')
+# tsne plot 
+df <- plot_tsne(M, ct, returnData = T)
 
-df <- plot_tsne(M[,unique(prog_vars$variable)], ct, returnData = T)
-df$pfi_subtype <- as.factor(prog.clust[rownames(df),'kmeans_3'])
+# top lf for LUSC
+top_lf_lusc <- top_vars[ref_cl == 'TCGA-LUSC']$variable
+top_lf_luad <- top_vars[ref_cl == 'TCGA-LUAD']$variable
+df <- cbind(df, 
+            M[,top_lf_lusc,drop = F],
+            M[,top_lf_luad,drop = F])
+p <- ggplot(df, aes(x = tSNE1, y = tSNE2)) 
+p2 <- p + geom_point(aes(color = group)) + 
+  geom_text_repel(data = get_centroid(df[,1:2], df$group), 
+            aes(x,y,label = text.label), size = 5)
+p3 <- p + geom_point(aes_string(color = top_lf_lusc)) + 
+  scale_color_gradient(low = 'gray', high = 'red') +
+  geom_text_repel(data = get_centroid(df[,1:2], df$group), 
+            aes(x,y,label = text.label), size = 5)
+p4 <- p + geom_point(aes_string(color = top_lf_luad)) + 
+  scale_color_gradient(low = 'gray', high = 'red') +
+  geom_text_repel(data = get_centroid(df[,1:2], df$group), 
+            aes(x,y,label = text.label), size = 5)
+p5 <- plot_datatype_contribution_by_factor(LFs, FWs, 'maui_factors', 'nsclc', 'cnv_gex_meth_mut', 
+                                     factors = ct, top_lfs = 1, top_features = 500) + 
+  labs(y = 'Relative Contribution\nto top latent factor')
 
-ggplot(df, aes(x = tSNE1, y = tSNE2)) + 
-  geom_point(aes(color = as.factor(pfi_subtype))) +
-  facet_wrap(~ group, nrow = 1 )
+dt <- data.table(M[,top_vars[['variable']]], keep.rownames = T)
+dt <- dt[rowSums(dt[,2:3]) > 0] 
+dt$pr <- surv[match(dt$rn, bcr_patient_barcode)]$project
 
-ggplot(df, aes(x = tSNE1, y = tSNE2)) + 
-  geom_point(aes(color = group)) +
-  facet_wrap(~ as.factor(pfi_subtype), nrow = 1 )
+# alternatively, split samples by LF scores, plot gene set scores 
+scores <- import_geneset_scores(geneSetScoresFolder, annotation = 'cancersea')
+S <- data.table(scores[intersect(rownames(scores), rownames(M)),], keep.rownames = T)
 
-scores <- sapply(simplify = F, c('msigdb_hallmarks', 'msigdb_canonical_pathways', 'cancersea'), 
-       function(x) {
-         scores <- import_geneset_scores(geneSetScoresFolder, x)
-         S <- scores[intersect(rownames(M), rownames(scores)),]
-         return(S)
-       })
+dt <- merge(dt, S, by = 'rn')
 
-pathways.prog <- get_factor_specific_variables(scores$cancersea, df$pfi_subtype)[padj < 0.05][order(padj)]
-pathways.ct <- get_factor_specific_variables(scores$cancersea, df$group)[padj < 0.05][order(padj)]
+mdt <- melt(dt, measure.vars = setdiff(colnames(S), 'rn'))
 
+p6 <- ggplot(mdt, aes(x = value, y = variable)) + 
+  ggridges::geom_density_ridges(aes(fill = get(top_lf_lusc) > get(top_lf_luad)), alpha = 0.7) +
+  labs(x = 'CancerSEA gene set scores', y = 'Cancer Cell States') + 
+  guides(fill=guide_legend(title=paste0(top_lf_lusc, " > ",top_lf_luad)))
 
-get_top_by_label(pathways.ct[padj < 0.05][order(padj)], 'ref_cl', 10)
+Fig <-  cowplot::plot_grid(p1, p2, p3, p4, p5, p6, 
+                         labels = 'AUTO', ncol = 2)
 
+fig_count <- fig_count + 1
+Figures[[fig_count]] <- Fig
+fig.name <- paste0('Figure', fig_count, '.luad_vs_lusc.pdf')
+names(Figures)[fig_count] <- fig.name
+ggsave(filename = file.path(FigureFolder, fig.name), 
+       Fig, units = 'in', 
+       width = 10, height = 12)
+Legends[[fig_count]] <- "Classification of Non-Small-Cell Lung Adenocarcinoma samples using MAUI latent factors.
+A) ROC curves with AUC values on testing data (40% of the dataset) trained on Elastic Net with 5-fold cross-validation. B) t-SNE plot of MAUI LFs colored by cancer types. C) t-SNE plot of MAUI LFs colored by 
+the top most-predictive latent factor for TCGA-LUSC samples. D) t-SNE plot of MAUI LFs colored by the top 
+most predictive latent factor for TCGA-LUAD samples. E) Percentage of top 500 contributing features each of the top most predictive latent factors broken down into categories by cancer type and data type. F) Cancer Cell State score distribution of samples grouped by whether the sample has a higher score for LUSC-predictive latent factor than the LUAD-predictive latent factor."
 ```
 
 
@@ -977,7 +1005,7 @@ for(i in 1:length(Figures)) {
   fig.url <- gsub("/data/bimsbstatic/public", base_url, file.path(FigureFolder, names(Figures)[i]))
   cat("# Figure",i,"[high-res image](",fig.url,")\n\n")
   print(Figures[[i]])
-  cat("\n Figure",i,":",Legends[[i]],"\n\n")
+  cat("\n\n Figure",i,":",Legends[[i]],"\n\n")
 }
 ```
 
