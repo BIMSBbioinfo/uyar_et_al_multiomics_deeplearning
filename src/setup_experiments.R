@@ -33,7 +33,7 @@ if(!dir.exists(assayDir)) {
   dir.create(assayDir)
 }
 
-cl <- parallel::makeCluster(length(projects))
+cl <- parallel::makeCluster(length(projects), outfile = 'setup_experiments.log')
 parallel::clusterExport(cl = cl, varlist = c('settings', 'projectDict', 'dataDir', 
                                              'surv', 'assayDir', 'GOI'))
 pbapply::pblapply(cl = cl, projects, function(pr) {
