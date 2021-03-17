@@ -236,13 +236,14 @@ predict_cluster_labels <- function(M, labels, partition = 0.7, ...) {
   return(auc.dt)
 }
 
-predict_cluster_labels_glmnet <- function(M, labels) {
+# returnROC: if set to TRUE, will return a ROC object, when FALSE returns AUC stats 
+predict_cluster_labels_glmnet <- function(M, labels, returnROC = FALSE) {
   require(caret)
   require(ranger)
   df <- data.frame(M)
   labels <- as.factor(as.character(labels))
   # for each factor level, do a one-vs-all classification with probabilities
-  auc.dt <- do.call(rbind, lapply(levels(labels), function(x) {
+  res <- sapply(simplify = F, levels(labels), function(x) {
     message(x)
     df$y <- as.factor(ifelse(labels == x, 'one', 'rest'))
     set.seed(3456)
@@ -268,13 +269,22 @@ predict_cluster_labels_glmnet <- function(M, labels) {
       test.pred <- predict(model, x.test, type = 'prob')
       r <- pROC::roc(testing$y, test.pred[,'one'])
       test.auc <- as.numeric(pROC::ci.auc(pROC::roc(testing$y, test.pred[,'one'])))
+      if(returnROC == TRUE) {
+        return(r)
+      }
       return(data.table('auc.lower' = test.auc[1], 'auc' = test.auc[2], 
                         'auc.upper' = test.auc[3], 'label' = x))
     } else {
+      if(returnROC == TRUE) {
+        return(NULL)
+      }
       return(data.table('auc.lower' = NA, 'auc' = NA, 'auc.upper' = NA, 'label' = x))
     }
-  }))
-  return(auc.dt)
+  })
+  if(returnROC == FALSE) {
+    return(do.call(rbind, res))
+  }
+  return(res)
 }
 # train a regression model to predict a target variable (y)
 # M: samples on the row, features on the column
@@ -1263,4 +1273,27 @@ import_geneset_scores <- function(geneSetScoresFolder, annotation = 'msigdb_hall
     return(M)
   }))
   return(scores)
+}
+
+# f: path to gmt format file 
+read_msigdb <- function(f) {
+  geneSets <- lapply(readLines(f), function(x) {
+    unlist(strsplit(x, "\t"))
+  })
+  #add names
+  names(geneSets) <- unlist(lapply(geneSets, function(x) x[1]))
+  #remove first two 
+  geneSets <- lapply(geneSets, function(x) x[-c(1:2)])
+  return(geneSets)
+}
+# d: path to folder that contains cancerSEA cell state signature files 
+read_cancersea <- function(d) {
+  files <- dir(d, '.txt$', full.names = T)
+  geneSets <- lapply(files, 
+                     function(f) {
+                       dt <- data.table::fread(f)
+                       return(unique(dt$EnsembleID))
+                     })
+  names(geneSets) <- gsub(".txt$", "", basename(files))
+  return(geneSets)
 }
