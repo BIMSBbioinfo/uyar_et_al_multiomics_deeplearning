@@ -756,7 +756,7 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     if(!is.null(GOI)) {mut <- mut[intersect(rownames(mut), GOI),]}
     
     # remove redundant features
-    mut <- t(remove_redundant_variables(t(mut), perc = 99, downsize_byTopVar = 15000))
+    #mut <- t(remove_redundant_variables(t(mut), perc = 99, downsize_byTopVar = 15000))
     
     # select genes with most non-zero samples
     selected <- head(names(sort(apply(mut, 1, function(x) sum(x > 0)), decreasing = T)), topN)
@@ -799,7 +799,7 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     if (!is.null(GOI)) {gex <- gex[intersect(rownames(gex), GOI),]}
     
     # remove redundant features
-    gex <- t(remove_redundant_variables(t(gex), perc = 99, downsize_byTopVar = 15000))
+    #gex <- t(remove_redundant_variables(t(gex), perc = 99, downsize_byTopVar = 15000))
     
     
     gex <- subset_features_by_variance(gex, topN = topN)
@@ -898,7 +898,7 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     meth <- do.call(cbind, lapply(meth, function(x) x[common_features,]))
     
     # remove redundant features
-    meth <- t(remove_redundant_variables(t(meth), perc = 99, downsize_byTopVar = 15000))
+    #meth <- t(remove_redundant_variables(t(meth), perc = 99, downsize_byTopVar = 15000))
     
     # get top features by variance
     meth <- subset_features_by_variance(meth, topN = topN)
