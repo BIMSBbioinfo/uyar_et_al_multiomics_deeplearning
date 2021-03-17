@@ -23,6 +23,7 @@ assay_output:
   folder: /data/local/buyar/arcas/pancancer_multiomics_manuscript/assays
   printCSV: TRUE # whether to print the assays as CSV files
   printRDS: TRUE # whether to print the assays as RDS files
+pipeline_output: /data/local/buyar/arcas/pancancer_multiomics_manuscript/output
 # whether to correct for batches (only applies to gene expression data)
 correctBatches: FALSE 
 datatypes: 
