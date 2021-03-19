@@ -38,6 +38,7 @@ TOOLS <- c('pca_factors', 'maui_factors', 'mofa_factors', 'mcia_factors')
 Figures <- list() # accummulate all figures in this
 SuppFigures <- list() # accumulate all supplementary figures in this
 Legends <- list() # figure legend text
+SuppLegends <- list() # supplementary figure legend text
 
 fig_count <- 0
 supFig_count <- 0
@@ -264,11 +265,11 @@ Fig <- plot_grid(plot_grid(plot_grid(p1, p2 + theme(axis.text.x = element_text(a
 
 supFig_count <- supFig_count + 1
 SuppFigures[[supFig_count]] <- Fig
-fig.name <- paste0('SuppFigure', fig_count, '.pancancer_subtype_prediction.pdf')
-names(Figures)[fig_count] <- fig.name
+fig.name <- paste0('SuppFigure', supFig_count, '.pancancer_subtype_prediction.pdf')
+names(SuppFigures)[supFig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name), 
               plot = Fig, units = 'in', width = 18, height = 12)
-SuppLegends[[fig_count]] <- "Predictive power of latent factors in distinguishing known TCGA cancer subtypes A-B) comparing MAUI with PCA/MOFA/MCIA. AUC: Area under the ROC curve computed on the test dataset (30% of held-out data) trained on 70% of the dataset using a Random Forest model. Each point represents one cancer subtype (pairwise one-sided Wilcoxon test on AUCs, alternative = maui AUC is not greater than others) C) Top maui LFs detected per cancer subtype (only displaying subtypes with at least 20 samples). Size/color/opacity of the points represent the average neural activation value of the LF for the corresponding subtype samples. D) Percentage of top feature types contributing to top predictive maui latent factor per cancer subtype."
+SuppLegends[[supFig_count]] <- "Predictive power of latent factors in distinguishing known TCGA cancer subtypes A-B) comparing MAUI with PCA/MOFA/MCIA. AUC: Area under the ROC curve computed on the test dataset (30% of held-out data) trained on 70% of the dataset using a Random Forest model. Each point represents one cancer subtype (pairwise one-sided Wilcoxon test on AUCs, alternative = maui AUC is not greater than others) C) Top maui LFs detected per cancer subtype (only displaying subtypes with at least 20 samples). Size/color/opacity of the points represent the average neural activation value of the LF for the corresponding subtype samples. D) Percentage of top feature types contributing to top predictive maui latent factor per cancer subtype."
 ```
 
 
@@ -1066,11 +1067,11 @@ Fig <- cowplot::plot_grid(p1, p2, labels = 'AUTO', nrow = 2)
 
 supFig_count <- supFig_count + 1
 SuppFigures[[supFig_count]] <- Fig
-fig.name <- paste0('SuppFigure', fig_count, '.subtype_dependency.pdf')
-names(Figures)[fig_count] <- fig.name
+fig.name <- paste0('SuppFigure', supFig_count, '.subtype_dependency.pdf')
+names(SuppFigures)[supFig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name), 
               plot = Fig, units = 'in', width = 18, height = 12)
-SuppLegends[[fig_count]] <- "Demonstration of how cancer subtypes are context/objective dependent.
+SuppLegends[[supFig_count]] <- "Demonstration of how cancer subtypes are context/objective dependent.
 A) Heatmap of patient cluster memberships based on different objectives: optimum stratification based on overall survival or progression free survival, molecular homogeneity (TCGA pan-GI subtypes), or micro-satellite instability (MSI) status. Columns are ordered first by membership in the optimum Overall Survival cluster membership. B) Pairwise Adjusted Mutual Information (AMI) of cluster labels obtained via different patient stratification methods. The AMI value ranges from 0 to 1 and the higher the value, the more overlap between patient partitions."
 ```
 
