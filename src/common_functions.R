@@ -1,5 +1,4 @@
 # common functions used in different analyses
-
 compute_PCA <- function(exp, topN = 50) {
   top <- head(names(sort(apply(exp, 1, sd), decreasing = T)), 5000)
   M <- t(exp[top,])
@@ -10,7 +9,7 @@ compute_PCA <- function(exp, topN = 50) {
 # given TCGA identifiers, create a table of batch information
 # see https://docs.gdc.cancer.gov/Encyclopedia/pages/TCGA_Barcode/
 getBatchTable <- function(TCGA_ids) {
-  dt <- data.table(do.call(rbind, lapply(strsplit(TCGA_ids, "-"), function(x) t(data.frame(x)))))
+  dt <- data.table::data.table(do.call(rbind, lapply(strsplit(TCGA_ids, "-"), function(x) t(data.frame(x)))))
   colnames(dt) <- c('project', 'TSS', 'participant', 'sample_vial', 'portion_analyte', 'plate', 'center')
   dt$bcr_patient_barcode <- paste(dt$project, dt$TSS, dt$participant, sep = '-')
   return(dt)
@@ -40,7 +39,7 @@ process_batch_table <- function(df, min_samples_per_batch = 10) {
     colnames(x) <- n
     return(x)
   })
-  dt <- data.table(do.call(cbind, l[!unlist(lapply(l, is.null))]))
+  dt <- data.table::data.table(do.call(cbind, l[!unlist(lapply(l, is.null))]))
   if(ncol(dt) == 0) {
     return(NULL)
   }
@@ -135,11 +134,11 @@ compute_cramers_V <- function(df) {
   do.call(rbind, lapply(1:(ncol(df)-1), function(i) {
     do.call(rbind, lapply((i+1):ncol(df), function(j) {
       if(length(unique(df[,i])) < 2 | length(unique(df[,j])) < 2) {
-        data.table('ref' = colnames(df)[i], 'target' = colnames(df)[j], 
+        data.table::data.table('ref' = colnames(df)[i], 'target' = colnames(df)[j], 
                    'cramersV' = NA, 'chisq_pval' = NA)
       } else {
         cv <- cv.test(df[,i], df[,j])
-        data.table('ref' = colnames(df)[i], 'target' = colnames(df)[j], 
+        data.table::data.table('ref' = colnames(df)[i], 'target' = colnames(df)[j], 
                    'cramersV' = cv$cramersV, 'chisq_pval' = cv$chisq_pval)
       }
     }))
@@ -174,7 +173,7 @@ get_tcga_sample_types <- function(barcodes) {
     b <- TCGAbiolinks::TCGAquery_SampleTypes(barcodes, x)
     message(x, ': found ',length(b), ' samples')
     if(length(b) > 0) {
-      return(data.table('barcode' = b, 'sampletype' = x))
+      return(data.table::data.table('barcode' = b, 'sampletype' = x))
     }
   }))
 }
@@ -188,7 +187,7 @@ subsetAssayData <- function(M, ids, replaceIDs = TRUE) {
   selected <- setdiff(selected, normal_samples)
   
   # find patients with multiple samples, pick only one sample per patient
-  dt <- data.table('sample' = selected, 'id' = sub("^(.{12}).+$", "\\1", selected))
+  dt <- data.table::data.table('sample' = selected, 'id' = sub("^(.{12}).+$", "\\1", selected))
   selected <- dt[,head(sample, 1),by = id]$V1
   
   M <- M[,which(as.character(colnames(M)) %in% selected)]
@@ -228,9 +227,9 @@ predict_cluster_labels <- function(M, labels, partition = 0.7, ...) {
       test.pred <- stats::predict(fit, testing)
       train.auc <- as.numeric(pROC::auc(pROC::roc(training$y, fit$predictions[,'one'])))
       test.auc <- as.numeric(pROC::auc(pROC::roc(testing$y, test.pred$predictions[,'one'])))
-      return(data.table('train_auc' = train.auc, 'test_auc' = test.auc, 'label' = x))
+      return(data.table::data.table('train_auc' = train.auc, 'test_auc' = test.auc, 'label' = x))
     } else {
-      return(data.table('train_auc' = NA, 'test_auc' = NA, 'label' = x))
+      return(data.table::data.table('train_auc' = NA, 'test_auc' = NA, 'label' = x))
     }
   }))
   return(auc.dt)
@@ -272,13 +271,13 @@ predict_cluster_labels_glmnet <- function(M, labels, returnROC = FALSE) {
       if(returnROC == TRUE) {
         return(r)
       }
-      return(data.table('auc.lower' = test.auc[1], 'auc' = test.auc[2], 
+      return(data.table::data.table('auc.lower' = test.auc[1], 'auc' = test.auc[2], 
                         'auc.upper' = test.auc[3], 'label' = x))
     } else {
       if(returnROC == TRUE) {
         return(NULL)
       }
-      return(data.table('auc.lower' = NA, 'auc' = NA, 'auc.upper' = NA, 'label' = x))
+      return(data.table::data.table('auc.lower' = NA, 'auc' = NA, 'auc.upper' = NA, 'label' = x))
     }
   })
   if(returnROC == FALSE) {
@@ -370,7 +369,7 @@ predict_labels_glmnet <- function(M, y, returnCoefs = FALSE) {
   x.test <- model.matrix(y ~., testing)[,-1]
   predictions <- predict(model, x.test)
   stats <- caret::confusionMatrix(predictions, as.factor(testing$y))
-  data.table(t(stats$overall))
+  data.table::data.table(t(stats$overall))
 }
 # using pathway scores per patients and clustering memberships of patients
 # calculate classification accuracy for cluster labels
@@ -430,7 +429,7 @@ get_factor_specific_variables <- function(M, factors)  {
     }))
   }))
   res$padj <- p.adjust(res$pval, method = 'BH')
-  return(as.data.table(res))
+  return(data.table::as.data.table(res))
 }
 
 read_msigdb <- function(f) {
@@ -484,7 +483,7 @@ get_differential_factors <- function(M, factors, Nodes = 10) {
   parallel::stopCluster(cl)
   res$padj <- p.adjust(res$pval, method = 'BH')
   # find markers that are really specific for each cluster and differential compared to every other cluster
-  res <- as.data.table(res)
+  res <- data.table::as.data.table(res)
   k <- length(unique(factors))
   # find those markers that are differential compared to all target clusters
   res_sig <- res[padj < 0.05, length(unique(target_cl)), by = c('variable', 'ref_cl')][V1 == (k-1)]
@@ -590,11 +589,11 @@ plot_diffusion_map <- function(M, factors, returnData = FALSE) {
 
 # do a kruskall-wallis H-test to find out variables that are enriched for batch factors
 find_batch_related_variables <- function(M, batch.df) {
-  r <- data.table(do.call(rbind, lapply(colnames(batch.df), function(batch) {
+  r <- data.table::data.table(do.call(rbind, lapply(colnames(batch.df), function(batch) {
     message(batch)
     do.call(rbind, pbapply::pblapply(X = colnames(M), function(variable) {
       t <- kruskal.test(M[,variable], batch.df[,batch])
-      data.table('batch' = batch, 'variable' = variable, 'kruskal_wallis_pval' = t$p.value)
+      data.table::data.table('batch' = batch, 'variable' = variable, 'kruskal_wallis_pval' = t$p.value)
     }))
   })))
   return(r)
@@ -978,7 +977,7 @@ process_clinical_covariates <- function(patientIDs) {
   clinicalData <- merge(clin, surv, by = 'bcr_patient_barcode')
   
   #add tumor purity data from the paper: https://www.nature.com/articles/ncomms9971
-  tumor_purity <- as.data.table(TCGAbiolinks::Tumor.purity)
+  tumor_purity <- data.table::as.data.table(TCGAbiolinks::Tumor.purity)
   tumor_purity$bcr_patient_barcode <- sub("^(.{12}).+$", "\\1", tumor_purity$Sample.ID)
   #we only use the clinically measured IHC values that are obtained from pathology slides. 
   clinicalData$tumor_purity_IHC <- tumor_purity[match(clinicalData$bcr_patient_barcode, tumor_purity$bcr_patient_barcode)]$IHC
@@ -1080,7 +1079,7 @@ get_prognostic_covariates <- function(surv, clin = NULL, explored_covariates,
     s <- summary(cox1)
     pval <- as.numeric(s$coefficients[v,][5])
     cindex <- s$concordance[['C']]
-    return(data.table('variable' = v, 'pval' = pval, 'cindex' = cindex))
+    return(data.table::data.table('variable' = v, 'pval' = pval, 'cindex' = cindex))
   }))
   if(!is.null(res)) {
     res <- res[pval < 0.05]
@@ -1140,7 +1139,7 @@ get_snf_clusters <- function(matrix.list, returnFusedNetworkOnly = FALSE) {
 }
 
 process_tcga_subtypes <- function() {
-  subtypes <- as.data.table(TCGAbiolinks::PanCancerAtlas_subtypes())
+  subtypes <- data.table::as.data.table(TCGAbiolinks::PanCancerAtlas_subtypes())
   # get patient barcodes from TCGA subtypes table
   subtypes$bcr_patient_barcode <- sub("(^TCGA-..-....).+", "\\1", subtypes$pan.samplesID)
   subtypes$project <- paste0('TCGA-', subtypes$cancer.type)
@@ -1186,7 +1185,7 @@ compute_anova <- function(M, factors, return_val = 'pvalue') {
       t <- anova(mod)
       effect_size <- sjstats::eta_sq(t)[['etasq']]
       #stats::TukeyHSD(t)
-      return(data.table("pval" = t$`Pr(>F)`[1], "effect_size"  = effect_size, "variable" = x))
+      return(data.table::data.table("pval" = t$`Pr(>F)`[1], "effect_size"  = effect_size, "variable" = x))
     }))
     dt$padj <- p.adjust(dt$pval, method = 'BH')
     return(dt)
@@ -1295,5 +1294,131 @@ read_cancersea <- function(d) {
                        return(unique(dt$EnsembleID))
                      })
   names(geneSets) <- gsub(".txt$", "", basename(files))
+  return(geneSets)
+}
+
+# import LFs for tools in inputDir
+import_LFs <- function(TOOLS, inputDir) {
+  LFs <- sapply(simplify = F, TOOLS, function(folder) {
+    message('Importing ',folder)
+    files <- dir(file.path(inputDir, folder), pattern = 'factors.csv$', full.names = T)
+    LFs <- pbapply::pbsapply(simplify = F, files, function(f) {
+      dt <- data.table::fread(f)
+      M <- as.matrix(dt[,-1])
+      rownames(M) <- dt$V1
+      return(M)
+    })
+    names(LFs) <- unlist(lapply(strsplit(basename(names(LFs)), split = '\\.'), function(x) paste(x[1:2], collapse = '.')))
+    return(LFs)
+  })
+}
+
+# import features weights for tools in inputDir
+import_feature_weights <- function(TOOLS, inputDir) {
+  FWs <- sapply(simplify = F, TOOLS, function(folder) {
+    message('Importing ',folder)
+    files <- dir(file.path(inputDir, folder), pattern = 'feature_weights.csv$', full.names = T)
+    W <- pbapply::pbsapply(simplify = F, files, function(f) {
+      dt <- data.table::fread(f)
+      M <- as.matrix(dt[,-1])
+      rownames(M) <- gsub("^assay: ", "", dt$V1) # required only for maui
+      return(M)
+    })
+    names(W) <- unlist(lapply(strsplit(basename(names(W)), split = '\\.'), 
+                              function(x) paste(x[1:2], collapse = '.')))
+    return(W)
+  })
+  return(FWs)
+}
+
+# make a roc plot from a named list of roc objects (pROC::roc)
+plot_roc_list <- function(rocs) {
+  aucs <- sapply(rocs, pROC::auc)
+  p1 <- pROC::ggroc(rocs, size = 1)
+  p1$data$name <- paste0(p1$data$name, " (AUC=", round(aucs[p1$data$name], 3),")")
+  p1 <- p1 + geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), color="grey", linetype="dashed") +
+    theme(legend.title = element_blank(), legend.direction = 'vertical')
+  return(p1)
+}
+
+# given two single-column data.frames sharing row.names, each column containing character vectors
+# plot bi-partite visualisation of labels (useful for comparing how different cluster memberships look)
+plot_cluster_comparison <- function(df1, df2) {
+  df1 <- data.frame(df1, check.names = F)
+  df2 <- data.frame(df2, check.names = F)
+  if(sum(is.na(df1[,1])) > 0) {
+    warning("Converting NA values to 'Undefined'")
+    df1[is.na(df1[,1]),1] <- 'Undefined'
+  }
+  if(sum(is.na(df2[,1])) > 0) {
+    warning("Converting NA values to 'Undefined'")
+    df2[is.na(df2[,1]),1] <- 'Undefined'
+  }
+  df1[,1] <- as.factor(df1[,1])
+  df2[,1] <- as.factor(df2[,1])
+  
+  dt <- data.table(merge(df1[,1,drop=F], df2[,1,drop = F], by = 'row.names'))
+  labels <- colnames(dt[,2:3])
+  colnames(dt) <- c('rn', 'g1', 'g2')
+  dt1 <- dt[order(g1), c('rn', 'g1')]
+  dt2 <- dt[order(g2), c('rn', 'g2')]
+  dt1$r1 <- 1:nrow(dt1)
+  dt2$r2 <- 1:nrow(dt2)
+  dt <- merge(dt1, dt2, by = 'rn')[order(rn)]
+  ami <- aricode::AMI(dt$g1, dt$g2)
+  label_pos_left <- -0.05
+  label_pos_right <- 1.05
+  # plot segments 
+  ggplot(dt[order(g1)]) + 
+    geom_point(aes(x = 0, y = r1, color = g1))  +
+    geom_point(aes(x = 1, y = r2, color = g2)) + 
+    geom_segment(aes(x = 0, xend = 1, y = r1, yend = r2, color = g1), alpha = 0.25) +
+    geom_label(data = dt[,median(r1), by = g1], aes(x = label_pos_left, y = V1, label = g1, color = g1), hjust = 1) +
+    geom_segment(data = dt[,list('max' = max(r1), 'min' = min(r1), 'median' = median(r1)), by = g1], 
+                 aes(x = label_pos_left, y = median, xend = 0, yend = max, color = g1)) + 
+    geom_segment(data = dt[,list('max' = max(r1), 'min' = min(r1), 'median' = median(r1)), by = g1], 
+                 aes(x = label_pos_left, y = median, xend = 0, yend = min, color = g1)) + 
+    geom_label(data = dt[,median(r2), by = g2], aes(x = label_pos_right, y = V1, label = g2, color = g2), hjust = 0) +
+    geom_segment(data = dt[,list('max' = max(r2), 'min' = min(r2), 'median' = median(r2)), by = g2], 
+                 aes(x = label_pos_right, y = median, xend = 1, yend = max, color = g2)) + 
+    geom_segment(data = dt[,list('max' = max(r2), 'min' = min(r2), 'median' = median(r2)), by = g2], 
+                 aes(x = label_pos_right, y = median, xend = 1, yend = min, color = g2)) + 
+    annotate('label', x = 0, y = max(dt$r1)+1, label = labels[1], vjust = 0) + 
+    annotate('label', x = 1, y = max(dt$r2)+1, label = labels[2], vjust = 0) + 
+    ggtitle(label = paste0(labels, collapse = " <-> "), 
+            subtitle = paste0("Adjusted Mutual Information: ",round(ami,2))) + 
+    theme_minimal() + 
+    theme(axis.text = element_blank(), axis.title = element_blank(), panel.grid = element_blank(), 
+          legend.position = 'none',
+          plot.margin = unit(c(0.1, 1.5, 0, 1.5), units = 'in'),
+          plot.title = element_text(hjust = 0.5), 
+          plot.subtitle = element_text(hjust = 0.5)) + 
+    coord_cartesian(clip = 'off') 
+}
+
+read_xCell_geneSets <- function(f, group_by_cell_type = FALSE) {
+  l <- readLines(f)
+  geneSets <- lapply(l[-1], function(x) {
+    res <- unlist(strsplit(gsub(" ", "_", x), "\t"))
+    return(setdiff(res[-c(1:2)], ''))
+  })
+  
+  names(geneSets) <- unlist(lapply(l[-1], function(x)
+    gsub(" ", "_", unlist(strsplit(x, "\t"))[1])))
+  
+  # there are multiple sources for cell types, which can be grouped together
+  if(group_by_cell_type == TRUE) {
+    dt <- data.table('name' = names(geneSets),
+                     'celltype' = sapply(strsplit(names(geneSets), "_"),
+                                         function(x) {
+                                           paste0(x[1:(length(x)-2)], collapse = '_')
+                                         }))
+    # for each cell type, get a union of genes that come from multiple sources
+    geneSets_by_celltype <- lapply(split(dt, dt$celltype), function(x) {
+      unique(unlist(geneSets[x$name]))
+    })
+    return(geneSets_by_celltype)
+  }
+  
   return(geneSets)
 }
