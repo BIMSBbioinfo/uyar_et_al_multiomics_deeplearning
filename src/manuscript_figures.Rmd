@@ -6,7 +6,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = FALSE, cache = TRUE)
+knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = FALSE)
 # todo: pass this as argument
 settings <- yaml::read_yaml('/data/local/buyar/arcas/pancancer_multiomics_manuscript/settings.yaml')
 source(settings$utility_script)
@@ -45,34 +45,11 @@ supFig_count <- 0
 ```
 
 ```{r import_lfs}
-LFs <- sapply(simplify = F, TOOLS, function(folder) {
-  message('Importing ',folder)
-  files <- dir(file.path(inputDir, folder), pattern = 'factors.csv$', full.names = T)
-  LFs <- pbapply::pbsapply(simplify = F, files, function(f) {
-    dt <- data.table::fread(f)
-    M <- as.matrix(dt[,-1])
-    rownames(M) <- dt$V1
-    return(M)
-  })
-  names(LFs) <- unlist(lapply(strsplit(basename(names(LFs)), split = '\\.'), function(x) paste(x[1:2], collapse = '.')))
-  return(LFs)
-})
+LFs <- import_LFs(TOOLS, inputDir)
 ```
 
 ```{r import_feature_weights}
-FWs <- sapply(simplify = F, TOOLS, function(folder) {
-  message('Importing ',folder)
-  files <- dir(file.path(inputDir, folder), pattern = 'feature_weights.csv$', full.names = T)
-  W <- pbapply::pbsapply(simplify = F, files, function(f) {
-    dt <- data.table::fread(f)
-    M <- as.matrix(dt[,-1])
-    rownames(M) <- gsub("^assay: ", "", dt$V1) # required only for maui
-    return(M)
-  })
-  names(W) <- unlist(lapply(strsplit(basename(names(W)), split = '\\.'), 
-                            function(x) paste(x[1:2], collapse = '.')))
-  return(W)
-})
+FWs <- import_feature_weights(TOOLS, inputDir)
 ```
 
 
@@ -228,7 +205,7 @@ fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
 fig.name <- paste0('Figure', fig_count, '.pancancer_cancer_type_prediction.pdf')
 names(Figures)[fig_count] <- fig.name
-ggsave(file.path(FigureFolder, fig.name), 
+ggsave(file.path(FigureFolder, fig.name),
               plot = Fig, units = 'in', width = 12, height = 9)
 Legends[[fig_count]] <- "Predictive power of latent factors in distinguishing cancer types. A-B) comparing maui with PCA/MOFA/MCIA. AUC: Area under the ROC curve computed on the test dataset (30% of held-out data) trained on 70% of the dataset using a Random Forest model. Each point represents one cancer type (pairwise one-sided Wilcoxon test on AUCs, alternative = maui AUC is not greater than others) C) Adjusted Mutual Information (AMI) value computed by comparing unsupervised clustering labels (k-means algorithm, k set to 21) with the cancer types. D) Top maui LFs detected per cancer type. Size/color/opacity of the points represent the average neural activation value of the LF for the corresponding cancer type samples. E) Percentage of top feature types contributing to top predictive maui latent factor per cancer type."
 
@@ -281,80 +258,83 @@ multi_omics_comb <- 'cnv_gex_meth_mut'
 experiments <- grep(paste0('^TCGA-.*.', multi_omics_comb), names(LFs$pca_factors), value = T)
 cl <- parallel::makeCluster(20)
 parallel::clusterExport(cl, varlist = c('LFs', 'experiments', 'settings'))
-clusters <- sapply(simplify = F, names(LFs), function(tool) {
+cluster.stats <- do.call(rbind, sapply(simplify = F, names(LFs), function(tool) {
   message("Clustering top ",tool)
-  pbapply::pbsapply(cl = cl, simplify = F, experiments, function(experiment) {
+  stats <- do.call(rbind, pbapply::pbsapply(cl = cl, simplify = F, 
+                                            intersect(names(LFs[[tool]]), experiments), 
+                    function(experiment) {
     message(experiment)
     source(settings$utility_script)
-    require(data.table)
+    library(data.table)
     M <- LFs[[tool]][[experiment]]
     if(tool == 'maui_factors') {
-      M <- remove_redundant_variables(M, perc = 99) # !!! make sure to use same setting as used for pan-cancer clustering
+      M <- remove_redundant_variables(M, perc = 99) 
     } 
-    M <- t(subset_features_by_variance(t(M), topN = 10))
     
-    val <- c('internal') 
-    if(ncol(M) > 2) {val <- c('internal', 'stability')}
-    res <- clValid::clValid(obj = M,
-                          nClust = 3:8,
-                          clMethods = 'kmeans',
-                          validation = val,
-                          maxitems = 10000,
-                          nstart = 1000)
-    memberships <- as.data.frame(do.call(cbind, lapply(res@clusterObjs[['kmeans']], function(x) x[['cluster']])))
-    colnames(memberships) <- paste0('k', colnames(memberships))
-    stats <- as.data.table(res@measures)[V1 %in% c('Silhouette', 'APN')]
-    colnames(stats) <- c('metric', 'k', 'clustering_method', 'score')
-    return(list('clustering_stats' = stats, 'cluster_memberships' = memberships))
-  })
-})
+    # try topN from 5 to 25 (each tool may capture different amount of information 
+    # by varying number of factors)
+    stats <- do.call(rbind, lapply(seq(5, min(25, ncol(M)), 5), function(n) {
+      message(n)
+      M.sub <- t(subset_features_by_variance(t(M), topN = n))
+      val <- c('internal') 
+      if(ncol(M) > 2) {val <- c('internal', 'stability')}
+      res <- clValid::clValid(obj = M.sub,
+                            nClust = 3:8,
+                            clMethods = 'kmeans',
+                            validation = val,
+                            maxitems = 10000,
+                            nstart = 1000, iter.max = 30)
+      stats <- data.table::as.data.table(res@measures)[V1 %in% c('Silhouette', 'APN')]
+      colnames(stats) <- c('metric', 'k', 'clustering_method', 'score')
+      stats$top_factors <- n
+      return(stats)
+    }))
+    stats$cancer_type <- strsplit(experiment, "\\.")[[1]][1]
+    stats$datatypes <- strsplit(experiment, "\\.")[[1]][2]
+    return(stats)
+  }))
+  stats$method <- tool
+  return(stats)
+}))
 parallel::stopCluster(cl)
 
-cluster.stats <- do.call(rbind, lapply(names(clusters), function(tool) {
-  do.call(rbind, lapply(names(clusters[[tool]]), function(experiment) {
-      cancer_type <- strsplit(experiment, "\\.")[[1]][1]
-      datatypes <- strsplit(experiment, "\\.")[[1]][2]
-      stats <- clusters[[tool]][[experiment]][['clustering_stats']]
-      stats$cancer_type <- cancer_type
-      stats$datatypes <- datatypes
-      stats$method <- tool
-      return(stats)
-  }))
-}))
-
 # plot silhouette/stability score comparison
-dt1 <- cluster.stats[metric == 'Silhouette'][datatypes == multi_omics_comb]
+dt1 <- cluster.stats[metric == 'Silhouette'][datatypes == multi_omics_comb,
+                                             .SD[which.max(score)],
+                                             by = c('cancer_type', 'method', 'k')]
 dt1$method <- toupper(gsub("_factors", "", dt1$method))
 comps <- lapply(setdiff(unique(dt1$method), 'MAUI'), function(x) c('MAUI', x))
 
 p1 <- ggboxplot(dt1, 
           x = 'method', y = 'score', add = 'jitter', color = 'method') + 
-  stat_compare_means(method = 'wilcox.test', paired = TRUE, 
+  stat_compare_means(method = 'wilcox.test', paired = FALSE, #todo change to true when mofa is finished
                      comparisons = comps) + 
   labs(title = 'Silhouette score', x = '') + 
   theme(legend.position = 'none')
 
 
-dt2 <- cluster.stats[metric == 'APN'][datatypes == multi_omics_comb]
+dt2 <- cluster.stats[metric == 'APN'][datatypes == multi_omics_comb,
+                                             .SD[which.min(score)],
+                                             by = c('cancer_type', 'method', 'k')]
 dt2$method <- toupper(gsub("_factors", "", dt2$method))
 comps <- lapply(setdiff(unique(dt2$method), 'MAUI'), function(x) c('MAUI', x))
 p2 <- ggboxplot(dt2, 
           x = 'method', y = 'score', add = 'jitter', color = 'method') + 
-  stat_compare_means(method = 'wilcox.test', paired = TRUE, 
+  stat_compare_means(method = 'wilcox.test', paired = FALSE,  #todo change to true when mofa is finished
                      comparisons = comps) + 
   labs(title = 'Cluster Stability Score (APN)', x = '') + 
   theme(legend.position = 'none')
 
 # combine both scores and plot for different values of k
-dt <- dcast(cluster.stats[datatypes == multi_omics_comb], 
-            cancer_type + method + k ~ metric, value.var = 'score')
-dt$kv <- paste0('kmeans(k=',dt$k,')')
-dt$method <- toupper(gsub("_factors", "", dt$method))
-p3 <- ggplot(dt,
-       aes(x = Silhouette, y = APN)) + 
-        geom_point(aes(color = method), size = 3) + 
-        facet_wrap(~ kv, ncol = 2) +
-        labs(title = 'Multi-omics clustering: Silhouette vs APN')
+# dt <- dcast(cluster.stats[datatypes == multi_omics_comb], 
+#             cancer_type + method + k ~ metric, value.var = 'score')
+# dt$kv <- paste0('kmeans(k=',dt$k,')')
+# dt$method <- toupper(gsub("_factors", "", dt$method))
+# p3 <- ggplot(dt,
+#        aes(x = Silhouette, y = APN)) + 
+#         geom_point(aes(color = method), size = 3) + 
+#         facet_wrap(~ kv, ncol = 2) +
+#         labs(title = 'Multi-omics clustering: Silhouette vs APN')
 
 # survival prediction accuracy benchmarking
 # find survival-predictive LFs by univariate cox models and use them in RSF
@@ -399,7 +379,7 @@ dt$project <- unlist(sapply(strsplit(dt$experiment, "\\."), function(x) x[1]))
 dt$endpoint <- ifelse(dt$variable == 'cindex.pfi', 'Progression Free Survival', 
                       'Overall Survival')
 # PCA/MOFA win, compare against PCA
-comps <- lapply(setdiff(unique(dt$method), 'PCA'), function(x) c('PCA', x))
+comps <- lapply(setdiff(unique(dt$method), 'MAUI'), function(x) c('MAUI', x))
 p4 <- ggboxplot(dt, x = 'method', y = 'value', color = 'method',
                 add = 'jitter', facet.by = 'endpoint') +
   stat_compare_means(method = 'wilcox.test', paired = TRUE,
@@ -407,9 +387,8 @@ p4 <- ggboxplot(dt, x = 'method', y = 'value', color = 'method',
   labs(y = "Harrel's C-index", x = '') +
   theme(legend.position = 'none')
 
-Fig <- plot_grid(plot_grid(p1, p2, labels = c('A', 'B'), ncol = 1),
-                 plot_grid(p3, p4, labels = c('C', 'D'), ncol = 1), 
-                 ncol = 2, rel_widths = c(2,3))
+Fig <- plot_grid(plot_grid(p1, p2, labels = c('A', 'B'), nrow = 1),
+                 p4, nrow = 2, labels = c('', 'C'))
 
 fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
@@ -639,33 +618,25 @@ MSI <- do.call(rbind, lapply(projectDict$`pan-gastrointestinal`, function(pr) {
 }))
 # remove samples with undertermined MSI status
 MSI <- MSI[MSI %in% c('MSI-H', 'MSI-L', 'MSS')]
-msi_stats <- do.call(rbind, lapply(names(LFs), function(tool) {
-  message(tool)
-  M <- LFs[[tool]][['pan-gastrointestinal.cnv_gex_meth_mut']]
-  y <- MSI[match(rownames(M), bcr_patient_barcode)]$MSI
-  M <- M[!is.na(y),]
-  y <- y[!is.na(y)]
-  #res <- predict_cluster_labels(M, y, partition = 0.6, num.trees = 2000)
-  res <- predict_cluster_labels_glmnet(M, y)
-  #res <- predict_labels_glmnet(M, y)
-  res$method <- tool
-  return(res)
-}))
-msi_stats$method <- toupper(gsub('_factors', '', msi_stats$method))
 
-p1 <- ggplot(msi_stats[method == 'MAUI'], aes(x = label, y = auc)) +
+M <- remove_redundant_variables(LFs$maui_factors[['pan-gastrointestinal.cnv_gex_meth_mut']], 
+                                perc = 99)
+y <- MSI[match(rownames(M), bcr_patient_barcode)]$MSI
+M <- M[!is.na(y),]
+y <- y[!is.na(y)]
+
+res <- predict_cluster_labels_glmnet(M, y)
+p1 <- ggplot(res, aes(x = label, y = auc)) +
   geom_bar(stat = 'identity', aes(fill = label)) + 
   labs(y = 'AUC', x = '') +
   geom_errorbar(aes(ymin = auc.lower, ymax = auc.upper), width = 0.2)+
   theme(legend.title = element_blank())
 
-# make some maui specific plots to explore MSI related LFs
-M <- remove_redundant_variables(LFs$maui_factors[['pan-gastrointestinal.cnv_gex_meth_mut']], 
-                                perc = 99) # make it consistent with pan-cancer
-y <- MSI[match(rownames(M), bcr_patient_barcode)]$MSI 
-M <- M[!is.na(y),]
-y <- y[!is.na(y)]
+# also plot a roc curve
+rocs <- predict_cluster_labels_glmnet(M, y, returnROC = TRUE)
+p2 <- plot_roc_list(rocs)
 
+# explore MSI related LFs
 # tsne plot of top LF related to MSI-H and MSI classes
 dt <- get_factor_specific_variables(M, y)
 # use top predictive lfs to guide tsne 
@@ -678,9 +649,9 @@ df <- merge(df, data.frame(M[,top_lf,drop =F]), by = 'row.names')
 df$cancertype <- surv[match(df$Row.names, bcr_patient_barcode)]$project
 df$subtype <- tcga_subtypes[match(df$Row.names, bcr_patient_barcode)]$Subtype_Selected
 
-p2.1 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + geom_point(aes(color = as.factor(group))) + 
+p3.1 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + geom_point(aes(color = as.factor(group))) + 
   theme(legend.title = element_blank())
-p2.2 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + 
+p3.2 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + 
   geom_point(aes_string(color = top_lf)) + 
   scale_color_gradient(low = 'gray', high = 'red')
 
@@ -708,21 +679,21 @@ freq <- do.call(rbind, lapply(0:29, function(i) {
   x$ind <- i
   return(x)
 }))
-p3 <- ggplot(freq[freq$ind < 5,], aes(x = reorder(rank, ind), y = Freq)) + 
+p4 <- ggplot(freq[freq$ind < 5,], aes(x = reorder(rank, ind), y = Freq)) + 
   geom_bar(aes(fill = Var1), stat='identity') + 
   theme(legend.title = element_blank(), axis.text.x = element_text(angle = 45)) + 
   labs(x = paste0("top features contributing to ",top_lf)) 
   
 
-Fig <- cowplot::plot_grid(p1, 
-                          plot_grid(p2.1, p2.2, p3, nrow = 1, labels = c('B', 'C', 'D')),
-                          nrow = 2, labels = c('A', ''), rel_heights = c(5,3))
+Fig <- cowplot::plot_grid(plot_grid(p1, p2, ncol = 1, labels = c('A', 'B')),
+                          plot_grid(p3.1, p3.2, p4, ncol = 1, labels = c('C', 'D', 'E')),
+                          nrow = 1)
 fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
 fig.name <- paste0('Figure', fig_count, '.MSI.status.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
-       plot = Fig, units = 'in', width = 10, height = 8)
+       plot = Fig, units = 'in', width = 8, height = 8)
 Legends[[fig_count]] <- "Predicting MSI status of pan-gastrointestinal tumors using MAUI latent factors. A) AUC values for predicting MSI status using MAUI LFs B) Top features that contribute to MAUI latent factor (‘LF95’) that is the most predictive latent factor in distinguishing samples with high microsatellite instability from the rest. C) tSNE plots of samples generated using top MSI-predictive LFs (5 LF per MSI class) colored by MSI status D) tSNE plots of samples colored by MAUI latent factor (‘LF95’) which is most predictive of MSI-H samples."
 ```
 
@@ -731,8 +702,6 @@ Legends[[fig_count]] <- "Predicting MSI status of pan-gastrointestinal tumors us
 # reference study: https://www.nature.com/articles/s41598-020-77284-8
 M <- remove_redundant_variables(LFs$maui_factors$nsclc.cnv_gex_meth_mut, perc = 99)
 ct <- surv[match(rownames(M), bcr_patient_barcode)]$project
-
-res <- predict_cluster_labels_glmnet(M, ct)
 
 # find type-specific LFs
 dt <- get_factor_specific_variables(M, ct)
@@ -1063,7 +1032,18 @@ p2 <- ggcorrplot::ggcorrplot(ami, legend.title = 'AMI', lab = T, type = 'lower',
   scale_fill_gradient(limits = c(0,1), low = 'white', high = 'red') + 
   guides(fill=guide_legend(title='AMI'))
 
+bipartite_plots <- unlist(lapply(1:(ncol(df)-1), function(i) {
+  lapply((i+1):ncol(df), function(j) {
+    p <- plot_cluster_comparison(df[,i,drop = F], df[,j,drop = F]) + 
+      theme(plot.margin = unit(c(0.2, 1.5, 0, 1.5), units = 'in'))
+  })
+}), recursive = F)
+
+Fig1 <- cowplot::plot_grid(plotlist = bipartite_plots, nrow = 3, labels = 'AUTO')
+ggsave('test1.pdf', plot = Fig1, units = 'in', width = 12, height = 14)
+
 Fig <- cowplot::plot_grid(p1, p2, labels = 'AUTO', nrow = 2)
+#ggsave('test2.pdf', plot = Fig2, units = 'in', width = 14, height = 12)
 
 supFig_count <- supFig_count + 1
 SuppFigures[[supFig_count]] <- Fig
