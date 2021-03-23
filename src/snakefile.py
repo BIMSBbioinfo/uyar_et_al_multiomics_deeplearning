@@ -16,8 +16,8 @@ rule all:
         expand(os.path.join(OUTDIR, 'mofa_factors', "{assay}.mofa_factors.feature_weights.csv"), assay = ASSAYS),
         expand(os.path.join(OUTDIR, 'pca_factors', "{assay}.pca_factors.csv"), assay = ASSAYS),
         expand(os.path.join(OUTDIR, 'pca_factors', "{assay}.pca_factors.feature_weights.csv"), assay = ASSAYS),
-	expand(os.path.join(OUTDIR, 'mcia_factors', "{assay}.mcia_factors.csv"), assay = ASSAYS), 
-	expand(os.path.join(OUTDIR, 'mcia_factors', "{assay}.mcia_factors.feature_weights.csv"), assay = ASSAYS)
+        expand(os.path.join(OUTDIR, 'mcia_factors', "{assay}.mcia_factors.csv"), assay = ASSAYS), 
+        expand(os.path.join(OUTDIR, 'mcia_factors', "{assay}.mcia_factors.feature_weights.csv"), assay = ASSAYS)
 
 rule run_mcia:
     input:
@@ -27,9 +27,10 @@ rule run_mcia:
         os.path.join(OUTDIR, 'mcia_factors', "{assay}.mcia_factors.feature_weights.csv")
     log: os.path.join(LOG_DIR, "run_mcia.{assay}.log")
     params:
-        script = os.path.join(SRCDIR, 'run_MCIA.R')
+        script = os.path.join(SRCDIR, 'run_MCIA.R'), 
+        nfactors = config['mcia']['nfactors']
     shell:
-        "{RSCRIPT} {params.script} {input} {output[0]} > {log} 2>&1"
+        "{RSCRIPT} {params.script} {input} {output[0]} {params.nfactors} > {log} 2>&1"
 
 rule run_maui:
     input:
@@ -39,9 +40,12 @@ rule run_maui:
         os.path.join(OUTDIR, 'maui_factors', "{assay}.maui_factors.feature_weights.csv")
     log: os.path.join(LOG_DIR, "run_maui.{assay}.log")
     params:
-        script = os.path.join(SRCDIR, 'run_maui.sh')
+        script = os.path.join(SRCDIR, 'run_maui.sh'),
+        nfactors = config['maui']['nfactors'],
+        epochs = config['maui']['epochs'],
+        threads = config['maui']['threads']
     shell:
-        "bash {params.script} {input} {output[0]} 100 500 2 > {log} 2>&1"
+        "bash {params.script} {input} {output[0]} {params.nfactors} {params.epochs} {params.threads} > {log} 2>&1"
 
 rule run_mofa:
     input:
@@ -51,9 +55,10 @@ rule run_mofa:
         os.path.join(OUTDIR, 'mofa_factors', "{assay}.mofa_factors.feature_weights.csv")
     log: os.path.join(LOG_DIR, "run_mofa.{assay}.log")
     params:
-        script = os.path.join(SRCDIR, 'run_mofa.R')
+        script = os.path.join(SRCDIR, 'run_mofa.R'),
+        nfactors = config['mofa']['nfactors']
     shell:
-        "export OMP_NUM_THREADS=2; {RSCRIPT} {params.script} {input} {output[0]}  > {log} 2>&1"
+        "export OMP_NUM_THREADS=2; {RSCRIPT} {params.script} {input} {output[0]} {params.nfactors} > {log} 2>&1"
 
 rule run_pca:
     input:
@@ -63,7 +68,8 @@ rule run_pca:
         os.path.join(OUTDIR, 'pca_factors', "{assay}.pca_factors.feature_weights.csv")
     log: os.path.join(LOG_DIR, "run_pca.{assay}.log")
     params:
-        script = os.path.join(SRCDIR, 'run_PCA.R')
+        script = os.path.join(SRCDIR, 'run_PCA.R'),
+        nfactors = config['pca']['nfactors']
     shell:
-        "{RSCRIPT} {params.script} {input} {output[0]} > {log} 2>&1"
+        "{RSCRIPT} {params.script} {input} {output[0]} {params.nfactors} > {log} 2>&1"
 

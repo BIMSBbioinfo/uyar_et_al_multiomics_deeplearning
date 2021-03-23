@@ -9,12 +9,13 @@ library(MOFA2)
 
 Assays <- args[1] # path to RDS object containing a list of assay matrices
 outFile <- args[2] # path to output file
-topFeatures <- args[3] # number of top features to use in training
+nFactors <- args[3] # number of factors to compute
 
 A <- readRDS(Assays)
 MOFAobject <- create_mofa(A)
 modelOptions <- MOFA2::get_default_model_options(MOFAobject)
-modelOptions$num_factors <- min(100, floor(median(sapply(A, ncol))/4)) # set to 0.25 of number of samples 
+# number of factors is maximally set to one forth of the total number of samples
+modelOptions$num_factors <- min(as.numeric(nFactors), floor(median(sapply(A, ncol))/4)) 
 MOFAobject <- prepare_mofa(MOFAobject, model_options = modelOptions)
 message(date(), " training MOFA")
 MOFAobject.trained <- run_mofa(MOFAobject, use_basilisk = TRUE)

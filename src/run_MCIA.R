@@ -5,12 +5,12 @@ library(omicade4)
 
 Assays <- args[1] # path to RDS object containing a list of assay matrices
 outFile <- args[2] # path to output file
+nFactors <- args[3] # number of factors to compute
 
 A <- readRDS(Assays)
-
-nf <- 20
-message(date(), " => Running MCIA looking for ",nf," factors")
-mcoin <- mcia(A, cia.nf=nf)
+nFactors <- as.numeric(nFactors)
+message(date(), " => Running MCIA looking for ",nFactors," factors")
+mcoin <- mcia(A, cia.nf=nFactors)
 
 LF <- mcoin$mcoa$SynVar
 rownames(LF) <- gsub("\\.", "-", rownames(LF))
