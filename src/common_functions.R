@@ -736,7 +736,7 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
                         topN = 1000, GOI = NULL,
                         TCGA_Disease_IDs, datatypes = c('gex', 'cnv', 'mut', 'meth'),
                         gex_flavor, 
-                        cnv_flavor) {
+                        cnv_flavor, ens2hgnc, cpg2hgnc) {
   patientIDs <- unique(clin[project %in% TCGA_Disease_IDs]$bcr_patient_barcode)
   dataList <- list('assay' = list(), 
                    'batch' = list())
@@ -762,10 +762,11 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     common_features <- Reduce(intersect, lapply(mut, rownames))
     # reorder features and concatenate columns
     mut <- do.call(cbind, lapply(mut, function(x) x[common_features,]))
-    if(!is.null(GOI)) {mut <- mut[intersect(rownames(mut), GOI),]}
-    
-    # remove redundant features
-    #mut <- t(remove_redundant_variables(t(mut), perc = 99, downsize_byTopVar = 15000))
+    if(!is.null(GOI)) {
+      # we assume genes have ensemble ids and GOI are gene symbols
+      s <- intersect(rownames(mut), ens2hgnc[hgnc_symbol %in% GOI]$ref_gene_id) # keep only GOI
+      mut <- mut[s,]
+    }
     
     # select genes with most non-zero samples
     selected <- head(names(sort(apply(mut, 1, function(x) sum(x > 0)), decreasing = T)), topN)
@@ -804,12 +805,11 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     common_features <- Reduce(intersect, lapply(gex, rownames))
     gex <- do.call(cbind, lapply(gex, function(x) x[common_features,]))
     
-    # subset by features
-    if (!is.null(GOI)) {gex <- gex[intersect(rownames(gex), GOI),]}
-    
-    # remove redundant features
-    #gex <- t(remove_redundant_variables(t(gex), perc = 99, downsize_byTopVar = 15000))
-    
+    if (!is.null(GOI)) {
+      # we assume genes have ensemble ids and GOI are gene symbols
+      s <- intersect(rownames(gex), ens2hgnc[hgnc_symbol %in% GOI]$ref_gene_id) # keep only GOI
+      gex <- gex[s,]
+    }
     
     gex <- subset_features_by_variance(gex, topN = topN)
     rownames(gex) <- paste0('gex.', rownames(gex))
@@ -853,15 +853,17 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
     common_features <- Reduce(intersect, lapply(cnv, rownames))
     cnv <- do.call(cbind, lapply(cnv, function(x) x[common_features,]))
     
-    if(!is.null(GOI)) {cnv <- cnv[intersect(GOI, rownames(cnv)),]}
+    if (!is.null(GOI)) {
+      # we assume cnv rownames are gene symbols and GOI are also gene symbols
+      s <- intersect(rownames(cnv), GOI) # keep only GOI
+      cnv <- cnv[s,]
+    }
     
     selected <- NULL
     if(cnv_flavor == 'cnv') {
-      # TODO: consider removing highly redundant ones
       # get top features # pick features which are most often gained/lost
       selected <- head(names(sort(apply(cnv, 1, function(x) sum(x == 0)))), topN) 
     } else if(cnv_flavor == 'cnv_gistic') {
-      # TODO: consider removing highly redundant ones
       # pick top features by variance in gistic scores
       selected <- head(names(sort(apply(cnv, 1, var), decreasing = T)), topN) 
     }
@@ -900,14 +902,16 @@ prepareData <- function(dataDir, clin, correctBatchEffects = TRUE,
         )
       # replace NA with 0
       meth[is.na(meth)] <- 0 
-      # TODO: summarize to gene level?
       return(meth)
     })
     common_features <- Reduce(intersect, lapply(meth, rownames))
     meth <- do.call(cbind, lapply(meth, function(x) x[common_features,]))
     
-    # remove redundant features
-    #meth <- t(remove_redundant_variables(t(meth), perc = 99, downsize_byTopVar = 15000))
+    if (!is.null(GOI)) {
+      # we assume meth rownames are cpg ids and GOI are gene symbols
+      s <- intersect(rownames(meth), cpg2hgnc[hgnc_symbol %in% GOI]$cpg_site) # keep only GOI
+      meth <- meth[s,]
+    }
     
     # get top features by variance
     meth <- subset_features_by_variance(meth, topN = topN)
