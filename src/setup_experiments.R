@@ -13,9 +13,8 @@ source(settings$utility_script)
 assayDir <- settings$assay_output$folder
 if(settings$features$use_geneset == TRUE) {
   ens2hgnc <- readRDS(settings$ens2hgnc)
-  geneSets <- read_msigdb(settings$geneset)
-  geneSets.ensembl <- map_ens2hgnc(geneSets, ens2hgnc, "hgnc2ens")
-  GOI <- unique(unlist(geneSets.ensembl))
+  cpg2hgnc <- readRDS(settings$cpg2hgnc)
+  GOI <- readLines(settings$geneset)
 } else {
   GOI <- NULL
 }
@@ -35,7 +34,7 @@ if(!dir.exists(assayDir)) {
 
 cl <- parallel::makeCluster(length(projects), outfile = 'setup_experiments.log')
 parallel::clusterExport(cl = cl, varlist = c('settings', 'projectDict', 'dataDir', 
-                                             'surv', 'assayDir', 'GOI'))
+                                             'surv', 'assayDir', 'GOI', 'ens2hgnc', 'cpg2hgnc'))
 pbapply::pblapply(cl = cl, projects, function(pr) {
   require(data.table)
   source(settings$utility_script)
@@ -47,7 +46,9 @@ pbapply::pblapply(cl = cl, projects, function(pr) {
                           TCGA_Disease_IDs = projectDict[[pr]], 
                           datatypes = settings$datatypes, 
                           gex_flavor = settings$datatype_flavors$gex, 
-                          cnv_flavor = settings$datatype_flavors$cnv) 
+                          cnv_flavor = settings$datatype_flavors$cnv, 
+                          ens2hgnc = ens2hgnc, #id mapping 
+                          cpg2hgnc = cpg2hgnc) #id mapping 
   # save assays 
   lapply(sapply(settings$datatype_combinations, function(x) strsplit(x, ',')), 
          function(datatypes) {
