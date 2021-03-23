@@ -9,3 +9,7 @@ Configure the experiment using the settings.yaml
 
 > time snakemake -p -s ./src/snakefile.py -j 10 --configfile ./settings2.yaml --keep-going
 
+./results folder contains sub-folders, where each sub-folder is for a different kind of analysis 
+Each sub-folder should contain an "assay" folder, a "settings.yaml" file for that experiment, and an "output" folder for the pipeline's output.
+
+
