@@ -15,6 +15,19 @@ projectDict: /data/local/buyar/arcas/subtyping_paper/data/projects.dict.yaml
 ## names of genes of interest for input feature subsetting (one gene per line) 
 geneset: /data/local/buyar/arcas/subtyping_paper/data/GeneSets/cancersea.symbols.txt 
 
+
+# tool settings
+maui:
+  nfactors: 20
+  epochs: 500
+  threads: 2
+mofa: 
+  nfactors: 20
+mcia: 
+  nfactors: 20
+pca: 
+  nfactors: 20
+
 # how to select features 
 features:
   # whether features should be only selected from the given gene sets 
