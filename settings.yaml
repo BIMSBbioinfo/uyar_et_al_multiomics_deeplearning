@@ -4,20 +4,22 @@ GDCdataDir: /data/local/buyar/pancancer_diagnostics/data/GDCdata_prepared
 utility_script: /data/local/buyar/arcas/pancancer_multiomics_manuscript/src/common_functions.R
 ## ensembl to hgnc mapping object
 ens2hgnc: /data/local/buyar/arcas/subtyping_paper/data/ens2hgnc.RDS
+## cpg site to hgnc mapping object
+cpg2hgnc: /data/local/buyar/arcas/subtyping_paper/data/cpg2hgnc.RDS
 ## curated survival/clinical data
 surv: /data/local/buyar/pancancer_diagnostics/data/GDCdata_processed2/TCGA.surv.RDS
 ## clinical data 
 clin: /data/local/buyar/pancancer_diagnostics/data/GDCdata_processed2/TCGA.clin.RDS
 ## project dictionary (a mapping of project names to list of tcga cancer types)
 projectDict: /data/local/buyar/arcas/subtyping_paper/data/projects.dict.yaml
-## msigdb gene sets to use for selecting features
-geneset: /data/local/Projects/AAkalin_Cancer/DataBase/GeneSets/msigdb/canonical_pathways.v7.1.symbols.gmt
+## names of genes of interest for input feature subsetting (one gene per line) 
+geneset: /data/local/buyar/arcas/subtyping_paper/data/GeneSets/cancersea.symbols.txt 
 
 # how to select features 
 features:
   # whether features should be only selected from the given gene sets 
-  use_geneset: FALSE 
-  topN: 1000 # features will be sorted by variance and top features will be selected
+  use_geneset: TRUE 
+  topN: 5000 # features will be sorted by variance and top features will be selected
 # folder to write the assays to 
 assay_output: 
   folder: /data/local/buyar/arcas/pancancer_multiomics_manuscript/assays
