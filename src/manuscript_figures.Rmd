@@ -8,7 +8,7 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = FALSE)
 # todo: pass this as argument
-settings <- yaml::read_yaml('/data/local/buyar/arcas/pancancer_multiomics_manuscript/settings.yaml')
+settings <- yaml::read_yaml('/data/local/buyar/arcas/pancancer_multiomics_manuscript/results/hallmark_genes/settings.yaml')
 source(settings$utility_script)
 library(data.table)
 library(ggplot2)
@@ -22,7 +22,7 @@ library(ComplexHeatmap)
 library(pheatmap)
 theme_set(ggpubr::theme_pubclean())
 geneSetScoresFolder <- '/data/local/buyar/arcas/subtyping_paper/data/geneset_scores/singscore'
-FigureFolder <- '/data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas'
+FigureFolder <- '/data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas/test'
 
 inputDir <- settings$pipeline_output
 assay_dir <- settings$assay_output$folder
@@ -183,7 +183,8 @@ df <- do.call(rbind, pbapply::pblapply(TOOLS, function(x) {
   message(x)
   M <- LFs[[x]][[experiment]]
   if(x == 'maui_factors') {
-    M <- remove_redundant_variables(M, perc = 99)
+    #M <- remove_redundant_variables(M, perc = 99)
+    M <- scale(M)
   }
   # find cancer types per sample
   ct <- surv[match(rownames(M), bcr_patient_barcode)]$project
@@ -273,11 +274,11 @@ cluster.stats <- do.call(rbind, sapply(simplify = F, names(LFs), function(tool) 
     
     # try topN from 5 to 25 (each tool may capture different amount of information 
     # by varying number of factors)
-    stats <- do.call(rbind, lapply(seq(5, min(25, ncol(M)), 5), function(n) {
+    stats <- do.call(rbind, lapply(seq(5, min(20, ncol(M)), 5), function(n) {
       message(n)
       M.sub <- t(subset_features_by_variance(t(M), topN = n))
       val <- c('internal') 
-      if(ncol(M) > 2) {val <- c('internal', 'stability')}
+      if(ncol(M.sub) > 2) {val <- c('internal', 'stability')}
       res <- clValid::clValid(obj = M.sub,
                             nClust = 3:8,
                             clMethods = 'kmeans',
@@ -325,21 +326,11 @@ p2 <- ggboxplot(dt2,
   labs(title = 'Cluster Stability Score (APN)', x = '') + 
   theme(legend.position = 'none')
 
-# combine both scores and plot for different values of k
-# dt <- dcast(cluster.stats[datatypes == multi_omics_comb], 
-#             cancer_type + method + k ~ metric, value.var = 'score')
-# dt$kv <- paste0('kmeans(k=',dt$k,')')
-# dt$method <- toupper(gsub("_factors", "", dt$method))
-# p3 <- ggplot(dt,
-#        aes(x = Silhouette, y = APN)) + 
-#         geom_point(aes(color = method), size = 3) + 
-#         facet_wrap(~ kv, ncol = 2) +
-#         labs(title = 'Multi-omics clustering: Silhouette vs APN')
-
 # survival prediction accuracy benchmarking
 # find survival-predictive LFs by univariate cox models and use them in RSF
+clin_factors <- c('age_at_initial_pathologic_diagnosis', 'gender', 'ajcc_pathologic_tumor_stage')
 cl <- parallel::makeCluster(20)
-parallel::clusterExport(cl, varlist = c('LFs', 'experiments', 'settings', 'surv'))
+parallel::clusterExport(cl, varlist = c('LFs', 'experiments', 'settings', 'surv', 'clin_factors'))
 surv.stats <- do.call(rbind, sapply(simplify = F, names(LFs), function(tool) {
   message("survival benchmark for ",tool)
   do.call(rbind, pbapply::pbsapply(cl = cl, simplify = F, experiments, function(experiment) {
@@ -348,39 +339,45 @@ surv.stats <- do.call(rbind, sapply(simplify = F, names(LFs), function(tool) {
     require(data.table)
     require(survminer)
     M <- LFs[[tool]][[experiment]]
-    if(tool == 'maui_factors') {
-      M <- remove_redundant_variables(M, 99)
-    }
-    dt <- data.table('cindex.pfi' = NA, 'cindex.os' = NA, 'experiment' = experiment, 'method' = tool)
+    clin <- process_clinical_covariates(rownames(M))
+    clin <- subset(clin, select = intersect(colnames(clin), clin_factors))
     # compute pfi stats
-    vars <- get_prognostic_covariates(surv, clin = NULL, explored_covariates = M,
-                                      event_col = 'PFI', duration_col = 'PFI.time')
-    if(!is.null(vars)) {
-      v <- head(vars[order(pval)][pval < 0.05][['variable']], 10)
-      fit <- fit_RSF(surv, M[,v], 1000, 'PFI.time', 'PFI')
-      dt$cindex.pfi <- round(1 - mean(fit$err.rate, na.rm = T), 2)
-    }
-    vars <- get_prognostic_covariates(surv, clin = NULL, explored_covariates = M,
-                                      event_col = 'OS', duration_col = 'OS.time')
-    if(!is.null(vars)) {
-      v <- head(vars[order(pval)][pval < 0.05][['variable']], 10)
-      fit <- fit_RSF(surv, M[,v], 1000, 'OS.time', 'OS')
-      dt$cindex.os <- round(1 - mean(fit$err.rate, na.rm = T), 2)
-    }
-    return(dt)
+    # fit a first model to filter variables 
+    fit <- fit_RSF(surv, M, ntree = 500, 'PFI.time', 'PFI')
+    # using a range of top variables, compute c index
+    dt1 <- do.call(rbind, lapply(2:10, function(i) {
+      vars <- names(head(sort(fit$importance, decreasing = T), i))
+      rsf_stats <- fit_RSF_clin(get_surv_df(surv, clin, 'PFI', 'PFI.time'), 
+                                M[,vars], ntree = 500)
+      dt <- data.table('cindex.base' = rsf_stats$C_wo, 'cindex' = rsf_stats$C_with, 
+                       'experiment' = experiment, 'method' = tool, 'topN' = i)
+    }))
+    dt1$endpoint <- 'PFI'
+    # do the same for overall survival
+    fit <- fit_RSF(surv, M, ntree = 500, 'OS.time', 'OS')
+    dt2 <- do.call(rbind, lapply(2:10, function(i) {
+      vars <- names(head(sort(fit$importance, decreasing = T), i))
+      rsf_stats <- fit_RSF_clin(get_surv_df(surv, clin, 'OS', 'OS.time'), 
+                                M[,vars], ntree = 500)
+      dt <- data.table('cindex.base' = rsf_stats$C_wo, 'cindex' = rsf_stats$C_with, 
+                       'experiment' = experiment, 'method' = tool, 'topN' = i)
+    }))
+    dt2$endpoint <- 'OS'
+    return(rbind(dt1, dt2))
   }))
 }))
 parallel::stopCluster(cl)
 
-dt <- melt(surv.stats, measure.vars = c('cindex.pfi', 'cindex.os'))
-dt[is.na(value)]$value <- min(dt$value, na.rm = T) # 
+dt <- surv.stats
 dt$method <- toupper(gsub("_factors", "", dt$method))
 dt$project <- unlist(sapply(strsplit(dt$experiment, "\\."), function(x) x[1]))
-dt$endpoint <- ifelse(dt$variable == 'cindex.pfi', 'Progression Free Survival', 
+dt$endpoint <- ifelse(dt$endpoint == 'PFI', 'Progression Free Survival', 
                       'Overall Survival')
+# get best performance per tool per project
+dt <- dt[,.SD[which.max(cindex)], by = c('project', 'method', 'endpoint')]
 # PCA/MOFA win, compare against PCA
 comps <- lapply(setdiff(unique(dt$method), 'MAUI'), function(x) c('MAUI', x))
-p4 <- ggboxplot(dt, x = 'method', y = 'value', color = 'method',
+p4 <- ggboxplot(dt, x = 'method', y = 'cindex', color = 'method',
                 add = 'jitter', facet.by = 'endpoint') +
   stat_compare_means(method = 'wilcox.test', paired = TRUE,
                      comparisons = comps) +
@@ -408,53 +405,58 @@ Legends[[fig_count]] <- "Comparison of unsupervised clustering performances base
 
 # factors to use in the model
 clin_factors <- c('age_at_initial_pathologic_diagnosis', 'gender', 'ajcc_pathologic_tumor_stage')
+event <- 'PFI'
+time <- 'PFI.time'
 
 experiments <- grep('^TCGA-.*.cnv_gex_meth_mut', names(LFs$maui_factors), value = T)
 cl <- parallel::makeCluster(20)
-parallel::clusterExport(cl, varlist = c('LFs', 'clin_factors', 
+parallel::clusterExport(cl, varlist = c('LFs', 'clin_factors', 'event', 'time',
                                         'surv', 'experiments', 'settings'))
 surv.stats <- pbapply::pbsapply(cl = cl, simplify = F, experiments, function(experiment) {
-    require(data.table)
-    source(settings$utility_script)
-    message(experiment)
-    M <- LFs$maui_factors[[experiment]]
-    # get clinical factors for the patients in matrix
-    clin <- process_clinical_covariates(rownames(M))
-    clin <- subset(clin, select = intersect(colnames(clin), clin_factors))
-    res <- get_prognostic_covariates(surv, clin, M, 'PFI', 'PFI.time')
-    if(!is.null(res)) {
-      cancer_type <- strsplit(experiment, "\\.")[[1]][1]
-      res$project <- cancer_type
-      v <- res[order(pval)][1]$variable
-      dat <- merge(clin, M[,v,drop = F], by = 'row.names')
-      rownames(dat) <- dat$Row.names
-      dat$Row.names <- NULL
-      dat <- get_surv_df(surv, dat) # add PFI values
-      # compute hazard ratios 
-      cox1 <- coxph(Surv(PFI.time,PFI) ~ ., 
-              data=dat, x = TRUE)
-      hr <- data.frame(summary(cox1)[['conf.int']]) # get hazard ratios with conf intervals
-      hr <- hr[grep(v, rownames(hr)), c(1,3,4)]
-      colnames(hr) <- c('hr', 'hr_low', 'hr_high')
-      rownames(hr) <- v
-      p1 <- survminer::ggforest(cox1, data = dat)
-      
-      # split variable into high/low to compute survival adjusted curves
-      cp <- find_survival_cutpoint(dat[,v,drop=F], surv)
-      dat[,v] <- ifelse(dat[,v] > cp, paste(v, 'high'), paste(v, 'low'))
-      cox2 <- coxph(Surv(PFI.time,PFI) ~ ., 
-                    data=dat, x = TRUE)
-      p2 <- survminer::ggadjustedcurves(fit = cox2, data = dat, variable = v, method = 'average')
-      
-      # compute Cindex with all survival-predictive LFs and without LFs 
-      vars <- res[pval < 0.05]$variable
-      rsf_stats <- fit_RSF_clin(get_surv_df(surv, clin), M[,vars], ntree = 1000)
-      
-      return(list('stats' = res, 'p1' = p1, 'p2' = p2, 'hr' = hr, 
-                  'Cindex_base' = rsf_stats$C_wo, 'Cindex_with_LFs' = rsf_stats$C_with))
-    }
-    return(NULL)
-  })
+  require(data.table)
+  require(survminer)
+  require(survival)
+  source(settings$utility_script)
+  message(experiment)
+  M <- LFs$maui_factors[[experiment]]
+  # get clinical factors for the patients in matrix
+  clin <- process_clinical_covariates(rownames(M))
+  clin <- subset(clin, select = intersect(colnames(clin), clin_factors))
+  # first filter variables by importance 
+  fit <- fit_RSF(surv, M, 500, time, event)
+  vars <- names(head(sort(fit$importance, decreasing = T), 5))
+    
+  # compute hazard ratios for the top factor
+  v <- vars[1] 
+  dat <- merge(clin, M[,v,drop = F], by = 'row.names')
+  rownames(dat) <- dat$Row.names
+  dat$Row.names <- NULL
+  dat <- get_surv_df(surv, dat, event, time)
+  # compute hazard ratios 
+  cox1 <- coxph(Surv(time,status) ~ ., 
+          data=dat, x = TRUE)
+  hr <- data.frame(summary(cox1)[['conf.int']]) # get hazard ratios with conf intervals
+  hr <- hr[grep(v, rownames(hr)), c(1,3,4)]
+  colnames(hr) <- c('hr', 'hr_low', 'hr_high')
+  rownames(hr) <- v
+  p1 <- survminer::ggforest(cox1, data = dat)
+    
+  # split variable into high/low to compute survival adjusted curves
+  cp <- find_survival_cutpoint(dat[,v,drop=F], surv, event_col = event, duration_col = time)
+  dat[,v] <- ifelse(dat[,v] > cp, paste(v, 'high'), paste(v, 'low'))
+  cox2 <- coxph(Surv(time,status) ~ ., 
+                data=dat, x = TRUE)
+  p2 <- survminer::ggadjustedcurves(fit = cox2, data = dat, variable = v, method = 'average')
+  
+  # compute Cindex with all survival-predictive LFs and without LFs 
+  rsf_stats <- fit_RSF_clin(get_surv_df(surv, clin, event, time), 
+                            M[,vars], ntree = 1000)
+  
+  return(list('p1' = p1, 'p2' = p2, 'hr' = hr, 
+              'Cindex_base' = rsf_stats$C_wo, 'Cindex_with_LFs' = rsf_stats$C_with))
+  
+  return(NULL)
+})
 parallel::stopCluster(cl)
 
 plots <- sapply(simplify = F, names(surv.stats), function(x) {   
@@ -865,12 +867,10 @@ prog.clust <- pbapply::pbsapply(cl = cl, simplify = F, experiments,
     # get clinical factors for the patients in matrix
     clin <- process_clinical_covariates(rownames(M))
     clin <- subset(clin, select = intersect(colnames(clin), clin_factors))
-    res <- get_prognostic_covariates(surv, clin, M, 'PFI', 'PFI.time')
+    
+    fit <- fit_RSF(surv, M, duration_col = 'PFI.time', event_col = 'PFI')
+    prog_lfs <- names(head(sort(fit$importance, decreasing = T), 5))
     # now cluster samples based on only survival predictive factors
-    prog_lfs <- unique(res$variable)
-    if(length(prog_lfs) < 2) {
-      return(NULL)
-    }
     clust <-  get_kmeans_subtypes(M[,prog_lfs], k_vals = 3:8, min_cluster_size = 0)
     # find value of k which minimizes log-rank p-value
     dt <- do.call(rbind, lapply(colnames(clust), function(x) {
@@ -1039,12 +1039,8 @@ bipartite_plots <- unlist(lapply(1:(ncol(df)-1), function(i) {
   })
 }), recursive = F)
 
-Fig1 <- cowplot::plot_grid(plotlist = bipartite_plots, nrow = 3, labels = 'AUTO')
-ggsave('test1.pdf', plot = Fig1, units = 'in', width = 12, height = 14)
 
 Fig <- cowplot::plot_grid(p1, p2, labels = 'AUTO', nrow = 2)
-#ggsave('test2.pdf', plot = Fig2, units = 'in', width = 14, height = 12)
-
 supFig_count <- supFig_count + 1
 SuppFigures[[supFig_count]] <- Fig
 fig.name <- paste0('SuppFigure', supFig_count, '.subtype_dependency.pdf')
@@ -1053,6 +1049,15 @@ ggsave(file.path(FigureFolder, fig.name),
               plot = Fig, units = 'in', width = 18, height = 12)
 SuppLegends[[supFig_count]] <- "Demonstration of how cancer subtypes are context/objective dependent.
 A) Heatmap of patient cluster memberships based on different objectives: optimum stratification based on overall survival or progression free survival, molecular homogeneity (TCGA pan-GI subtypes), or micro-satellite instability (MSI) status. Columns are ordered first by membership in the optimum Overall Survival cluster membership. B) Pairwise Adjusted Mutual Information (AMI) of cluster labels obtained via different patient stratification methods. The AMI value ranges from 0 to 1 and the higher the value, the more overlap between patient partitions."
+
+Fig <- cowplot::plot_grid(plotlist = bipartite_plots, nrow = 3, labels = 'AUTO')
+supFig_count <- supFig_count + 1
+SuppFigures[[supFig_count]] <- Fig
+fig.name <- paste0('SuppFigure', supFig_count, '.subtype_dependency.bipartite_plots.pdf')
+names(SuppFigures)[supFig_count] <- fig.name
+ggsave(file.path(FigureFolder, fig.name), 
+              plot = Fig, units = 'in', width = 14, height = 14)
+SuppLegends[[supFig_count]] <- "Demonstration of how cancer subtypes are context/objective dependent"
 ```
 
 
