@@ -67,7 +67,7 @@ fit_RSF <- function(surv, M, ntree = 1000,
 }
 
 # given a matrix of numerical variables and a data.frame of clinical variables 
-# including PFI.time (OS.time) or PFI (OS)
+# including time and status
 # fit a random survival forest and compute c index
 fit_RSF_clin <- function(clin, M, ntree = 1000) {
   require(data.table)
@@ -82,10 +82,10 @@ fit_RSF_clin <- function(clin, M, ntree = 1000) {
     return(dat[,x,drop = F])
   }))
   # fit with/without latent factors
-  fit1 <- randomForestSRC::rfsrc(formula = Surv(PFI.time, PFI) ~ .,
+  fit1 <- randomForestSRC::rfsrc(formula = Surv(time, status) ~ .,
                                 data = dat, ntree = ntree)
   Cindex1 <- round(1 - mean(fit1$err.rate, na.rm = T), 2)
-  fit2 <- randomForestSRC::rfsrc(formula = Surv(PFI.time, PFI) ~ .,
+  fit2 <- randomForestSRC::rfsrc(formula = Surv(time, status) ~ .,
                                  data = subset(dat, select = colnames(clin)), 
                                  ntree = ntree)
   Cindex2 <- round(1 - mean(fit2$err.rate, na.rm = T), 2)
@@ -1096,11 +1096,11 @@ get_prognostic_covariates <- function(surv, clin = NULL, explored_covariates,
   }
 }
 
-get_surv_df <- function(surv, M) {
+get_surv_df <- function(surv, M, event_col = 'PFI', duration_col = 'PFI.time') {
   df <- as.data.frame(M)
-  df$PFI <- surv[match(rownames(df), bcr_patient_barcode)]$PFI
-  df$PFI.time <- surv[match(rownames(df), bcr_patient_barcode)]$PFI.time
-  df <- df[!is.na(df$PFI.time),]
+  df <- cbind(df, data.frame('status' = surv[match(rownames(df), bcr_patient_barcode)][,get(event_col)], 
+                             'time' = surv[match(rownames(df), bcr_patient_barcode)][,get(duration_col)]))
+  df <- df[!is.na(df$time),]
   return(df)
 }
 
@@ -1162,13 +1162,13 @@ process_tcga_subtypes <- function() {
 
 # df: data.frame with a single numerical column with sample ids in rows 
 # function finds the cut point in the first column of df that maximizes survival separation into two
-find_survival_cutpoint <- function(df, surv) {
+find_survival_cutpoint <- function(df, surv, event_col = 'PFI', duration_col = 'PFI.time') {
     require(maxstat)
+    df <- cbind(df, data.frame('status' = surv[match(rownames(df), bcr_patient_barcode)][,get(event_col)], 
+                               'time' = surv[match(rownames(df), bcr_patient_barcode)][,get(duration_col)]))
+    df <- df[!is.na(df$time),]
     colnames(df)[1] <- 'score'
-    df$PFI <- surv[match(rownames(df), bcr_patient_barcode)]$PFI
-    df$PFI.time <- surv[match(rownames(df), bcr_patient_barcode)]$PFI.time
-    df <- df[!is.na(df$PFI.time),]
-    st <- maxstat::maxstat.test(Surv(PFI.time, PFI) ~ score, data = df, 
+    st <- maxstat::maxstat.test(Surv(time, status) ~ score, data = df, 
                                 smethod="LogRank", pmethod="exactGauss", 
                                 abseps=0.01)
     return(as.numeric(st$estimate))
