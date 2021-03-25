@@ -433,8 +433,8 @@ Legends[[fig_count]] <- "Comparison of unsupervised clustering performances base
 
 # factors to use in the model
 clin_factors <- c('age_at_initial_pathologic_diagnosis', 'gender', 'ajcc_pathologic_tumor_stage')
-event <- 'PFI'
-time <- 'PFI.time'
+event <- 'OS'
+time <- 'OS.time'
 
 experiments <- grep('^TCGA-.*.cnv_gex_meth_mut', names(LFs$maui_factors), value = T)
 cl <- parallel::makeCluster(20)
