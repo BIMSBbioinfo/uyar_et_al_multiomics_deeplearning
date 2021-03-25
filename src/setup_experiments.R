@@ -11,9 +11,9 @@ settings <- yaml::read_yaml(argv$settings)
 source(settings$utility_script)
 
 assayDir <- settings$assay_output$folder
+ens2hgnc <- readRDS(settings$ens2hgnc)
+cpg2hgnc <- readRDS(settings$cpg2hgnc)
 if(settings$features$use_geneset == TRUE) {
-  ens2hgnc <- readRDS(settings$ens2hgnc)
-  cpg2hgnc <- readRDS(settings$cpg2hgnc)
   GOI <- readLines(settings$geneset)
 } else {
   GOI <- NULL
