@@ -1426,3 +1426,29 @@ read_xCell_geneSets <- function(f, group_by_cell_type = FALSE) {
   
   return(geneSets)
 }
+
+# given a vector of genes and a list of gene sets, compute which gene sets are over-represented in the given gene pool
+# genes: query set of genes
+# geneSets: list of gene sets
+# background: vector of gene universe (optional. if not provided, union of geneSets is used as background)
+compute_geneset_enrichment <- function(genes, geneSets, background = NULL) {
+  if(is.null(background)) {
+    background <- unique(unlist(geneSets))
+  }
+  res <- do.call(rbind, lapply(names(geneSets), function(gs) {
+    x <- geneSets[[gs]]
+    o <- length(intersect(genes, x))
+    p <- length(intersect(x, background))/length(background) # probability of overlap
+    data.table('term' = gs, 'overlap' = o, 'query_size' = length(genes), 'target_size' = length(x), 
+               'expected_overlap' = round(p * length(genes), 2), 
+               'prob' = p, 
+               'pval' = binom.test(x = o, n = length(genes), p = p, alternative = 'greater')[['p.value']])
+  }))
+  res$padj <- p.adjust(res$pval, method = 'BH')
+  return(res)
+}
+
+
+
+
+
