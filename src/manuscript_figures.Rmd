@@ -269,7 +269,8 @@ cluster.stats <- do.call(rbind, sapply(simplify = F, names(LFs), function(tool) 
     library(data.table)
     M <- LFs[[tool]][[experiment]]
     if(tool == 'maui_factors') {
-      M <- remove_redundant_variables(M, perc = 99) 
+      #M <- remove_redundant_variables(M, perc = 99) 
+      M <- scale(M)
     } 
     
     # try topN from 5 to 25 (each tool may capture different amount of information 
@@ -621,8 +622,8 @@ MSI <- do.call(rbind, lapply(projectDict$`pan-gastrointestinal`, function(pr) {
 # remove samples with undertermined MSI status
 MSI <- MSI[MSI %in% c('MSI-H', 'MSI-L', 'MSS')]
 
-M <- remove_redundant_variables(LFs$maui_factors[['pan-gastrointestinal.cnv_gex_meth_mut']], 
-                                perc = 99)
+M <- LFs$maui_factors[['pan-gastrointestinal.cnv_gex_meth_mut']]
+M <- scale(M) #remove_redundant_variables(M, perc = 99)
 y <- MSI[match(rownames(M), bcr_patient_barcode)]$MSI
 M <- M[!is.na(y),]
 y <- y[!is.na(y)]
@@ -702,7 +703,8 @@ Legends[[fig_count]] <- "Predicting MSI status of pan-gastrointestinal tumors us
 ```{r}
 # Analysis of non-small-cell lung cancer types (LUSC vs LUAD)
 # reference study: https://www.nature.com/articles/s41598-020-77284-8
-M <- remove_redundant_variables(LFs$maui_factors$nsclc.cnv_gex_meth_mut, perc = 99)
+M <- LFs$maui_factors$nsclc.cnv_gex_meth_mut
+M <- scale(M) #remove_redundant_variables(M, perc = 99)
 ct <- surv[match(rownames(M), bcr_patient_barcode)]$project
 
 # find type-specific LFs
@@ -787,7 +789,8 @@ require(survminer)
 require(cluster)
 pr <- 'pan-gastrointestinal' 
 experiment <- paste0(pr, '.cnv_gex_meth_mut')
-M <- remove_redundant_variables(LFs$maui_factors[[experiment]], perc = 99)
+M <- LFs$maui_factors[[experiment]]
+M <- scale(M) #remove_redundant_variables(, perc = 99)
 st <- tcga_subtypes[match(rownames(M), bcr_patient_barcode)]$Subtype_Selected
 # find subtype specific LFs 
 dt <- get_factor_specific_variables(M, st)
@@ -987,8 +990,6 @@ datatype <- 'cnv_gex_meth_mut'
 experiment <- paste0(project, '.', datatype)
 
 M <- LFs$maui_factors[[experiment]]
-M <- remove_redundant_variables(M, perc = 99)
-
 clin <- process_clinical_covariates(rownames(M))
 clin <- subset(clin, select = intersect(colnames(clin), clin_factors))
 
