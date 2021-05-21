@@ -21,12 +21,14 @@ maui:
   nfactors: 20
   epochs: 500
   threads: 2
+  batch_size: 100
 mofa: 
   nfactors: 20
 mcia: 
   nfactors: 20
 pca: 
   nfactors: 20
+RSCRIPT_EXEC: /opt/R/4.0/bin/Rscript
 
 # how to select features 
 features:

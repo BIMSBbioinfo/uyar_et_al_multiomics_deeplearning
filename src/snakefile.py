@@ -4,7 +4,7 @@ import os
 ASSAYDIR = config['assay_output']['folder'] 
 SRCDIR = '/data/local/buyar/arcas/pancancer_multiomics_manuscript/src' 
 ASSAYS = set([os.path.splitext(f)[0] for f in os.listdir(ASSAYDIR) if re.match(r'.*\.csv$', f)])
-RSCRIPT = '/opt/R-4.0.2/lib64/R/bin/Rscript'
+RSCRIPT = config['RSCRIPT_EXEC'] 
 OUTDIR = config['pipeline_output']
 LOG_DIR = os.path.join(OUTDIR, "logs")
 
@@ -43,9 +43,10 @@ rule run_maui:
         script = os.path.join(SRCDIR, 'run_maui.sh'),
         nfactors = config['maui']['nfactors'],
         epochs = config['maui']['epochs'],
-        threads = config['maui']['threads']
+        threads = config['maui']['threads'],
+	batch_size = config['maui']['batch_size']
     shell:
-        "bash {params.script} {input} {output[0]} {params.nfactors} {params.epochs} {params.threads} > {log} 2>&1"
+        "bash {params.script} {input} {output[0]} {params.nfactors} {params.epochs} {params.threads} {params.batch_size} > {log} 2>&1"
 
 rule run_mofa:
     input:

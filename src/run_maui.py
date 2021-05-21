@@ -11,6 +11,7 @@ parser.add_argument("outFile", help = "Path to output file for latent factors")
 parser.add_argument("Nlatent", help = "Number of latent factors to search for")
 parser.add_argument("Nepochs", help = "Number of epochs to run the training algorithm")
 parser.add_argument("Nthreads", help = "Number of threads used to run maui")
+parser.add_argument("batchSize", help = "Batch size to feed to the network")
 args = parser.parse_args()
 
 #read assay matrix
@@ -19,7 +20,7 @@ print(assay.head())
 #start session
 from keras import backend as K
 K.set_session(K.tf.Session(config=K.tf.ConfigProto(intra_op_parallelism_threads=int(args.Nthreads), inter_op_parallelism_threads=int(args.Nthreads))))
-maui_model = maui.Maui(n_hidden=[1000], n_latent=int(args.Nlatent), epochs=int(args.Nepochs))
+maui_model = maui.Maui(n_hidden=[1000], n_latent=int(args.Nlatent), epochs=int(args.Nepochs), batch_size = int(args.batchSize))
 z = maui_model.fit_transform({'assay': assay})
 # save LF to file
 z.to_csv(args.outFile)
