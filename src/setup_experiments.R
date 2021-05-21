@@ -25,14 +25,14 @@ surv <- do.call(rbind, readRDS(settings$surv))
 dataDir <- settings$GDCdataDir
 
 projects <- settings$projects
-projectDict <- sapply(yaml::read_yaml(settings$projectDict), 
+projectDict <- sapply(simplify = F, yaml::read_yaml(settings$projectDict), 
                       function(x) gsub(' ', '', unlist(strsplit(x, ','))))
 
 if(!dir.exists(assayDir)) {
   dir.create(assayDir)
 }
 
-cl <- parallel::makeCluster(length(projects), outfile = 'setup_experiments.log')
+cl <- parallel::makeCluster(min(length(projects), 20), outfile = 'setup_experiments.log')
 parallel::clusterExport(cl = cl, varlist = c('settings', 'projectDict', 'dataDir', 
                                              'surv', 'assayDir', 'GOI', 'ens2hgnc', 'cpg2hgnc'))
 pbapply::pblapply(cl = cl, projects, function(pr) {
