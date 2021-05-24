@@ -323,9 +323,9 @@ predict_numerical_glmnet <- function(M, y) {
   testing <- df[-intrain,]
   # Build the model using the training set
   set.seed(123)
-  model <- train(
+  model <- caret::train(
     y ~., data = training, method = "glmnet",
-    trControl = trainControl("cv", number = 10),
+    trControl = trainControl("cv", number = 5, allowParallel = F),
     tuneLength = 10
   )
   # Best tuning parameter
