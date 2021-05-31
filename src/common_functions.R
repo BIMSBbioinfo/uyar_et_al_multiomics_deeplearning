@@ -285,6 +285,43 @@ predict_cluster_labels_glmnet <- function(M, labels, returnROC = FALSE) {
   }
   return(res)
 }
+
+
+predict_labels_glmnet_multiclass <- function(M, labels, partition = 0.6, nodes = 5) {
+  df <- data.frame(M)
+  df$y <- as.factor(labels)
+  set.seed(3456)
+  intrain <- caret::createDataPartition(y = df$y, p= partition, list = FALSE)
+  training <- df[intrain,]
+  testing <- df[-intrain,]
+  # Build the model using the training set
+  fit.control <- trainControl(method = "cv", number = 5, 
+                              summaryFunction = multiClassSummary, classProbs = TRUE)
+  set.seed(123)
+  require(doParallel)
+  cl <- makePSOCKcluster(nodes)
+  registerDoParallel(cl)
+  model <- train(
+    y ~., data = training, method = "glmnet",
+    trControl = fit.control, 
+    metric = 'logLoss', #for multi-class prediction
+    tuneLength = 10
+  )
+  stopCluster(cl)
+  
+  # Best tuning parameter
+  message("Best model parameters: alpha=", model$bestTune$alpha, 
+          " lambda=", model$bestTune$lambda)
+  x.test <- model.matrix(y ~., testing)[,-1]
+  test.pred <- predict(model, x.test, type = 'prob')
+  y_pred <- apply(test.pred, 1, function(x) colnames(test.pred)[which.max(x)]) 
+  res <- cbind(data.frame(test.pred), 
+               data.frame('obs' = as.factor(testing$y), 
+                          'pred' = as.factor(y_pred)))
+  return(res)
+}
+
+
 # train a regression model to predict a target variable (y)
 # M: samples on the row, features on the column
 predict_numerical <- function(M, y, ...) {
@@ -1211,7 +1248,6 @@ plot_label_specific_vars <- function(M, labels, top_vars_per_label = 1,
                                 function(x) {head(x, top_vars_per_label)}))
     top_vars <- unique(dt$variable)
   }
-  #plot_tsne(M, M[,'LF36'])
   B <- get_basis_matrix(M[,top_vars,drop=F], labels)
   if(as_heatmap == TRUE) {
     p <- pheatmap::pheatmap(t(B), scale = 'row', silent = T, ...)
@@ -1219,7 +1255,6 @@ plot_label_specific_vars <- function(M, labels, top_vars_per_label = 1,
   }
   df <- melt(B)
   df$Var1 <- stringr::str_wrap(df$Var1, width = string_width)
-  #pheatmap(B)
   ggplot(df, aes(x = Var2, y = Var1)) + 
     geom_point(aes(size = value, color = value, alpha = value)) + 
     scale_color_gradient(low = 'white', high = 'red') + 
