@@ -25,6 +25,8 @@ library(ggridges)
 library(ggcorrplot)
 library(ComplexHeatmap)
 library(pheatmap)
+library(survminer)
+library(survival)
 theme_set(ggpubr::theme_pubclean())
 geneSetScoresFolder <- '/data/local/buyar/arcas/subtyping_paper/data/geneset_scores/singscore'
 
@@ -191,7 +193,7 @@ ids <- lapply(split(df, df$pr), function(x) {
   }
 })
 ids <- ids[lengths(ids) == 200]
-k <- 5  
+k <- 5
 # sample cancer types and compute ami for different tools 
 sampled <- sapply(simplify = F, 1:50, function(i) {
   unique(unlist(ids[sample(1:length(ids), k)]))
@@ -205,7 +207,7 @@ res <- do.call(rbind, pbapply::pblapply(cl = cl, 1:length(sampled), function(i) 
   ct <- df[match(selected, df$id),]$pr
   message("selected cancers:",paste0(unique(ct), collapse = ','))
   do.call(rbind, lapply(names(LFs), function(tool) {
-    M <- scale(LFs[[tool]]$pancancer.cnv_gex_meth_mut[selected,])
+    M <- LFs[[tool]]$pancancer.cnv_gex_meth_mut[selected,]
     if(tool == 'maui_factors') {
       M <- scale(M)
     }
@@ -217,9 +219,10 @@ res <- do.call(rbind, pbapply::pblapply(cl = cl, 1:length(sampled), function(i) 
 parallel::stopCluster(cl)
 res$method <- toupper(gsub("_factors", "", res$method))
 
+
 comps <- lapply(setdiff(unique(res$method), 'MAUI'), function(x) c('MAUI', x))
 p5 <- ggboxplot(res, x = 'method', y = 'ami', add = 'jitter', color = 'method') + 
-  stat_compare_means(method = 'wilcox.test', paired = TRUE,
+  stat_compare_means(method = 'wilcox.test', paired = TRUE, 
                      comparisons = comps) +
   labs(y = "Adjusted Mutual Information", x = '') +
   theme(legend.position = 'none')
@@ -538,7 +541,7 @@ dt$variable <- ifelse(dt$variable == 'base', 'Only clinical factors', 'Clinical 
 p3 <- ggplot(ci, aes(x = reorder(project, with_lf))) + 
   geom_segment(aes(x = reorder(project, with_lf), xend = project, 
                    y = base, yend = with_lf)) + 
-  geom_point(data = dt, aes(x = project, y = value, color = variable), size = 6) +
+  geom_point(data = dt, aes(x = project, y = value, color = variable), size = 2) +
   coord_flip() + 
   labs(x = '', y = '') + 
   theme(legend.title = element_blank(), legend.position = 'bottom', 
@@ -670,7 +673,7 @@ p2 <- plot_roc_list(rocs)
 # tsne plot of top LF related to MSI-H and MSI classes
 dt <- get_factor_specific_variables(M, y)
 # use top predictive lfs to guide tsne 
-top_vars <- unique(get_top_by_label(dt[padj < 0.05][order(padj)], 'ref_cl', 5)[['variable']])
+top_vars <- unique(get_top_by_label(dt[padj < 0.05][order(padj)], 'ref_cl', 10)[['variable']])
 
 df <- plot_tsne(M[,top_vars], y, returnData = T)
 # color tsne by top lf informative for MSI-H
@@ -946,10 +949,12 @@ scores <- import_geneset_scores(geneSetScoresFolder, 'msigdb_canonical_pathways'
 # scores: geneset scores
 # M: survival predictive LF matrix
 # maui_clust: best survival prognostic clustering of M 
-plot_clusts <- function(M, maui_clust, scores) {
+plot_clusts <- function(surv, M, maui_clust, scores) {
   df <- plot_tsne(M, as.factor(maui_clust[,1]), returnData = T)
   colnames(df)[3] <- 'maui'
 
+  message("running plot clusts")
+  message("p1")
   p1 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + 
     geom_point(aes(color = maui)) +
     geom_text_repel(data = get_centroid(df[,1:2], df$maui), 
@@ -961,6 +966,7 @@ plot_clusts <- function(M, maui_clust, scores) {
   worst <- names(sort(ms)[1])
   best <- names(sort(ms, T)[1])
   
+  message("p2")
   p2 <- plot_survival(surv, 
                       df[df$maui %in% c(best, worst), 
                          'maui', drop = F])[['plot']] +
@@ -973,6 +979,8 @@ plot_clusts <- function(M, maui_clust, scores) {
   dt <- get_factor_specific_variables(S[selected,], df[selected, 'maui'])
   # select factors 
   dt[padj < 0.05][order(padj)]
+  message("h1")
+
   h1 <- plot_label_specific_vars(S[selected,], 
                                  df[selected, 'maui'], 
                                  padj_threshold = 0.1,
@@ -990,14 +998,16 @@ e <- dt[1,]$experiment
 M <- prog.clust[[e]]$prog.lf
 maui_clust <- prog.clust[[e]]$prog.clust
 S <- scores[intersect(rownames(M), rownames(scores)),]
-P <- plot_clusts(M, maui_clust, S)
+P <- plot_clusts(surv, M, maui_clust, S)
 
 Fig <- cowplot::plot_grid(p1, plot_grid(P$p1, P$p2, nrow = 1, labels = c('B', 'C')), 
                    P$h1$gtable, nrow = 3, labels = c('A', '', 'D'))
 
+message("Got the figure")
+
 fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
-fig.name <- paste0('Figure', fig_count, '.semi_supervised.prognostic.clustering.', experiment,'.pdf')
+fig.name <- paste0('Figure', fig_count, '.semi_supervised.prognostic.clustering.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, units = 'in', 
@@ -1088,6 +1098,106 @@ ggsave(file.path(FigureFolder, fig.name),
 SuppLegends[[supFig_count]] <- "Demonstration of how cancer subtypes are context/objective dependent"
 ```
 
+
+```{r immunotherapy_response}
+# immunotherapy response prediction analysis: 
+# TODO: pass paths via args
+settings_imtrp <- yaml::read_yaml('/data/local/buyar/arcas/pancancer_multiomics_manuscript/results/immunotherapy_response/Mariathasan_et_al/settings.yaml')
+pathways <- readRDS('/data/local/buyar/arcas/subtyping_paper/data/GeneSets/msigdb.pathways.RDS')  
+
+LFs_imtrp <- import_LFs(c('maui_factors', 'mofa_factors', 'pca_factors'), settings_imtrp$pipeline_output)
+FWs_imtrp <- import_feature_weights(c('maui_factors'), settings_imtrp$pipeline_output)
+colData <- data.table::fread(settings_imtrp$clin)
+colnames(colData)[1] <- 'bcr_patient_barcode'
+
+dt <- do.call(rbind, lapply(names(LFs_imtrp), function(tool) {
+  M <- LFs_imtrp[[tool]]$mariathasan.gex
+  # find LFs predictive of response to therapy 
+  dt <- get_factor_specific_variables(M, colData$binaryResponse)[order(padj)]
+  #dt <- compute_anova(M, colData$binaryResponse)
+  dt$tool <- tool
+  return(dt)
+}))
+
+dt[,.SD[which.min(padj)],by = c('tool', 'ref_cl')]
+
+top_vars <- unique(dt$variable) 
+
+# quantify prediction accuracy for finding complete/partial responders
+m <- M[,top_vars]
+f <- colData$binaryResponse
+m <- m[!is.na(f),]
+f <- f[!is.na(f)]
+
+# heatmap of top vars 
+p1 <- pheatmap::pheatmap(get_basis_matrix(m[,top_vars], f), silent = T)
+
+# survival stratification using the top LF 
+require(survminer)
+require(survival)
+top_lf <- dt[order(padj)][ref_cl == 'CR/PR'][1,]$variable
+cp <- find_survival_cutpoint(m[,top_lf,drop = F], colData, event_col = 'censOS', duration_col = 'os')
+
+p2 <- plot_survival(surv = colData, partition.df = data.frame('group' = ifelse(m[,top_lf] > cp, 'high', 'low'), 
+                                                        row.names = rownames(m)), 
+              duration_col = 'os', event_col = 'censOS')
+
+# top go terms for top features of top LF 
+feats <- data.table(W[,top_lf,drop=F], keep.rownames = T)[order(abs(get(top_lf)), decreasing = T)][1:100]
+# top pathways for top lf
+top_terms <- compute_geneset_enrichment(feats$rn, pathways)[order(pval)][padj < 0.05][1:10]
+top_terms$term_wr <- stringr::str_wrap(gsub("_", " ", top_terms$term), width = 32)
+p3 <- ggplot(top_terms, aes(x = reorder(term_wr, -pval), y = -log10(padj))) + 
+  geom_bar(stat = 'identity') + 
+  coord_flip() + labs(x = '') 
+colnames(feats)[2] <- 'top_lf'
+p4 <- ggplot(feats[1:10,], aes(x = reorder(rn, abs(top_lf)), y = abs(top_lf))) + 
+  geom_bar(stat = 'identity') + coord_flip() + labs(x = '', y = 'Feature Importance (absolute)')
+
+# correlation of top LF with tumor mutation burden
+# get samples with both response and tmb annotation
+cd <- colData #colData[!is.na(`Neoantigen burden per MB`)][!is.na(binaryResponse)]
+m2 <- M[cd$bcr_patient_barcode,]
+require(ggpubr)
+df <- data.frame('response' = cd$binaryResponse, 
+                 'TMB' = cd$`Neoantigen burden per MB`, 
+                 'LF' = m2[,top_lf])
+p5 <- ggpubr::ggscatter(df, x = 'LF', y = 'TMB', 
+                        add = 'reg.line', cor.coef = T, cor.coef.coord = c(30, 10), 
+                  cor.coef.size = 4) + labs(x = top_lf, y = 'Tumor Mutation Burden')
+
+# immune phenotypes 
+ip <- colData$`Immune phenotype`
+#ip[ip == 'excluded'] <- NA
+m3 <- M[!is.na(ip),]
+ip <- ip[!is.na(ip)]
+
+dt3 <- get_factor_specific_variables(m3, ip)[order(pval)][padj < 0.01]
+ip_vars <- unique(dt3$variable)
+ip_vars <- get_top_by_label(dt3, 'ref_cl', topN = 5)
+res_ip <- predict_cluster_labels_glmnet(m3[,unique(dt3$variable)], ip, returnROC = T)
+p6 <- plot_roc_list(res_ip)
+
+pheatmap::pheatmap(get_basis_matrix(m3[,unique(ip_vars$variable)], ip), silent = T)
+
+Fig <- cowplot::plot_grid(cowplot::plot_grid(p1, p2$gtable, p4, p3$plot, 
+                                             labels = 'AUTO'), 
+                          cowplot::plot_grid(p5, p6, p7, nrow = 1, 
+                                             labels = c('E', 'F', 'G')), 
+                          nrow = 2, rel_heights = c(2, 1)) 
+fig_count <- fig_count + 1
+Figures[[fig_count]] <- Fig
+fig.name <- paste0('Figure', fig_count, '.immunotherapy_response.pdf')
+names(Figures)[fig_count] <- fig.name
+ggsave(filename = file.path(FigureFolder, fig.name), 
+       plot = Fig, units = 'in', 
+       width = 10, height = 14)
+Legends[[fig_count]] <- "Predicting responders to anti-PD-L1 treatment in a cohort of Metastatic Urothelial
+Cancers (N=348) using MAUI. A) AUC curve for predicting Complete/Partial Responders (CR/PR) to the anti-PD-L1
+treatment using an Elastic Net Model on a subset of MAUI latent factors individually predictive of treatment response groups. B) Average activation score of top latent factors predictive of treatment response groups. C) Top pathways enriched among top 100 genes that contribute to the top latent factor (LF44). D) Survival stratification of the 
+cohort based activation score of LF44 (high = LF44 > 1.4, low = LF44 < 1.4). E) Top 10 genes contributing to LF44
+F) Correlation between LF44 activation score and the tumor (neo-antigen) mutation burden"
+```
 
 
 ```{r print_figures, results='asis', include=TRUE, fig.width=10, fig.height=11}
