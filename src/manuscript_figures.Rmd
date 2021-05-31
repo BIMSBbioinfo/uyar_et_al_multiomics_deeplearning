@@ -60,46 +60,6 @@ FWs <- import_feature_weights(TOOLS, inputDir)
 
 
 ```{r}
-# Define a function that takes as input LFs and some patient labels (clinical/cancer type/subtype)
-# and evaluates predictability of the labels using the LFs
-predict_labels <- function(LFs, surv, tcga_subtypes, 
-                           project, datatype, label.type, ...) {
-  source(settings$utility_script)
-  predict_stats <- do.call(rbind, sapply(simplify = F, names(LFs), function(tool) {
-    require(data.table)
-    message("predicting ",label.type," using ",tool)
-    experiment <- paste(project, datatype, sep = '.')
-    M <- LFs[[tool]][[experiment]]
-    if(label.type == 'cancer_type') {
-      labels <- data.frame('cancer_type' = surv[match(rownames(M), bcr_patient_barcode)]$project, 
-                           row.names = rownames(M))
-    } else if (label.type == 'subtype') {
-      labels <- data.frame('subtype' = tcga_subtypes[match(rownames(M),
-                                                           bcr_patient_barcode)]$Subtype_Selected, 
-                           row.names = rownames(M))
-    } else if (label.type == 'clinical') {
-      labels <- process_clinical_covariates(rownames(M))
-    }
-    dt <- do.call(rbind, lapply(colnames(labels), function(x) {
-      l <- labels[,x]
-      if(is.numeric(l)){
-        # categorize samples by intervals
-        l <- as.character(cut_interval(l, 10))
-      }
-      l[is.na(l)] <- 'Undefined'
-      message("Predicting ",x, " for experiment ",experiment)
-      dt <- suppressMessages(predict_cluster_labels(M, l, ...))
-      dt$label.type <- x
-      dt$project <- project
-      dt$datatypes <- datatype
-      dt$method <- tool
-      return(dt)
-    }))
-    return(dt)
-  }))
-  return(predict_stats[!is.na(train_auc)])
-}
-
 plot_comp1 <- function(dt) {
   dt$method <- toupper(gsub("_factors", "", dt$method))
   comps <- lapply(setdiff(unique(dt$method), 'MAUI'), function(x) c('MAUI', x))
@@ -166,10 +126,30 @@ plot_datatype_contribution_by_factor <- function(LFs, FWs, tool, project, dataty
 
 ```{r pancancer_prediction, fig.height=9, fig.width=12}
 # Find out if cancer types are predictable using latent factors 
-pancancer_stats <- predict_labels(LFs, surv, tcga_subtypes, 'pancancer', 
-                                  'cnv_gex_meth_mut', label.type = 'cancer_type', num.trees = 1000)
-p1 <- plot_comp1(pancancer_stats) + theme(axis.title.x = element_blank())
-p2 <- plot_comp2(pancancer_stats)
+
+res <- sapply(simplify = F, names(LFs), function(tool) {
+  message(date(), " => ", tool)
+  M <- LFs[[tool]]$pancancer.cnv_gex_meth_mut
+  ct <- gsub("-", "_", surv[match(rownames(M), bcr_patient_barcode)]$project)
+  res <- predict_labels_glmnet_multiclass(M, ct, partition = 0.6, nodes = 20)
+})
+
+pancancer_stats <- sapply(res, function(x) {
+  caret::multiClassSummary(x, lev = levels(x$obs))
+})
+
+dt <- data.table(melt(pancancer_stats))[Var1 %in% c('Mean_Balanced_Accuracy')]
+dt$Var2 <- toupper(gsub("_factors", "", dt$Var2))
+p1 <- ggplot(dt, aes(x = Var2, y = value)) + 
+  geom_bar(stat = 'identity', aes(fill = Var2)) + 
+  labs(y = 'Mean Balanced Accuracy') + 
+  theme(legend.title = element_blank(), axis.title.x = element_blank())
+
+# performance visualisation
+m <- as.matrix(table(res$maui_factors$pred, res$maui_factors$obs))
+p2 <- pheatmap(apply(m, 1, function(x) round(x/sum(x) * 100, 1)), cluster_rows = F, cluster_cols = F, 
+         display_numbers = T, number_format = "%.1f", silent = T)
+
 # plot cancer specific factors
 M <- LFs$maui_factors$pancancer.cnv_gex_meth_mut
 ct <- surv[match(rownames(M), bcr_patient_barcode)]$project
