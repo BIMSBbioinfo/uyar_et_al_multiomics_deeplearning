@@ -162,51 +162,6 @@ p4 <- plot_datatype_contribution_by_factor(LFs, FWs, 'maui_factors',
 p4 <- p4 + labs(y = 'Relative Contribution\nto top latent factor') + 
   theme(legend.position = 'right', legend.background = element_blank())
 
-
-# do unsupervised clustering experiment and compute AMI 
-# downsample pan-cancer dataset 
-df <- data.frame('id' = rownames(LFs$pca_factors$pancancer.cnv_gex_meth_mut))
-df$pr <- surv[match(df$id, bcr_patient_barcode)]$project
-ids <- lapply(split(df, df$pr), function(x) {
-  if(nrow(x) > 200) {
-    sample(x$id, 200)
-  }
-})
-ids <- ids[lengths(ids) == 200]
-k <- 5
-# sample cancer types and compute ami for different tools 
-sampled <- sapply(simplify = F, 1:50, function(i) {
-  unique(unlist(ids[sample(1:length(ids), k)]))
-})
-cl <- parallel::makeCluster(10)
-parallel::clusterExport(cl, varlist = c('ids', 'df', 'LFs', 'settings', 'sampled', 'k'))
-res <- do.call(rbind, pbapply::pblapply(cl = cl, 1:length(sampled), function(i) {
-  require(data.table)
-  source(settings$utility_script)
-  selected <- sampled[[i]]
-  ct <- df[match(selected, df$id),]$pr
-  message("selected cancers:",paste0(unique(ct), collapse = ','))
-  do.call(rbind, lapply(names(LFs), function(tool) {
-    M <- LFs[[tool]]$pancancer.cnv_gex_meth_mut[selected,]
-    if(tool == 'maui_factors') {
-      M <- scale(M)
-    }
-    ami <- compute_AMI(M, k, ct)
-    return(data.table('i' = i, 'ami' = ami, 'method' = tool, 
-                      'pr' = paste0(unique(ct), collapse = ',')))
-  }))
-}))
-parallel::stopCluster(cl)
-res$method <- toupper(gsub("_factors", "", res$method))
-
-
-comps <- lapply(setdiff(unique(res$method), 'MAUI'), function(x) c('MAUI', x))
-p5 <- ggboxplot(res, x = 'method', y = 'ami', add = 'jitter', color = 'method') + 
-  stat_compare_means(method = 'wilcox.test', paired = TRUE, 
-                     comparisons = comps) +
-  labs(y = "Adjusted Mutual Information", x = '') +
-  theme(legend.position = 'none')
-
 Fig <- plot_grid(plot_grid(p1, p2, p5, nrow = 1, labels = c('A', 'B', 'C')), 
                   plot_grid(p3, p4, rel_widths = c(5,3), nrow = 1, labels = c('D', 'E')), 
                   nrow = 2,
