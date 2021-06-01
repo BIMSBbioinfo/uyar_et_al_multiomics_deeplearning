@@ -591,7 +591,7 @@ plot_tsne <- function(M, factors = NULL, show.labels = F,
     centroids$group <- as.factor(rownames(centroids))
     p <- p + geom_text(data = centroids, aes(x = x, y = y, 
                                         label = group), 
-                       size = 8)
+                       size = 4)
   }
   return(p)
 }
