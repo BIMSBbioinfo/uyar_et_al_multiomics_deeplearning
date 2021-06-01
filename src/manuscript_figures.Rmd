@@ -143,7 +143,8 @@ dt$Var2 <- toupper(gsub("_factors", "", dt$Var2))
 p1 <- ggplot(dt, aes(x = Var2, y = value)) + 
   geom_bar(stat = 'identity', aes(fill = Var2)) + 
   labs(y = 'Mean Balanced Accuracy') + 
-  theme(legend.title = element_blank(), axis.title.x = element_blank())
+  theme(legend.title = element_blank(), axis.title.x = element_blank(), 
+        axis.text = element_text(size = 14), axis.title = element_text(size = 16))
 
 # performance visualisation
 m <- as.matrix(table(res$maui_factors$pred, res$maui_factors$obs))
@@ -153,6 +154,7 @@ p2 <- pheatmap(apply(m, 1, function(x) round(x/sum(x) * 100, 1)), cluster_rows =
 # plot cancer specific factors
 M <- LFs$maui_factors$pancancer.cnv_gex_meth_mut
 ct <- surv[match(rownames(M), bcr_patient_barcode)]$project
+
 p3 <- plot_label_specific_vars(M, ct)
 
 # data type contribution to top LF per factor
@@ -162,8 +164,8 @@ p4 <- plot_datatype_contribution_by_factor(LFs, FWs, 'maui_factors',
 p4 <- p4 + labs(y = 'Relative Contribution\nto top latent factor') + 
   theme(legend.position = 'right', legend.background = element_blank())
 
-Fig <- plot_grid(plot_grid(p1, p2, p5, nrow = 1, labels = c('A', 'B', 'C')), 
-                  plot_grid(p3, p4, rel_widths = c(5,3), nrow = 1, labels = c('D', 'E')), 
+Fig <- plot_grid(plot_grid(p1, p2$gtable, nrow = 1, labels = c('A', 'B')), 
+                  plot_grid(p3, p4, nrow = 1, labels = c('C', 'D')), 
                   nrow = 2,
                   rel_heights = c(2,3))
 
