@@ -633,13 +633,13 @@ p6 <- ggplot(freq[freq$ind < 5,], aes(x = reorder(rank, ind), y = Freq)) +
   
 
 Fig <- cowplot::plot_grid(p1, p5, p2, p3, p4, p6,
-                          nrow = 3)
+                          nrow = 3, labels = 'AUTO')
 fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
 fig.name <- paste0('Figure', fig_count, '.MSI.status.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
-       plot = Fig, units = 'in', width = 8, height = 8)
+       plot = Fig, units = 'in', width = 12, height = 12)
 Legends[[fig_count]] <- "Predicting MSI status of pan-gastrointestinal tumors using MAUI latent factors. A) AUC values for predicting MSI status using MAUI LFs B) Top features that contribute to MAUI latent factor (‘LF95’) that is the most predictive latent factor in distinguishing samples with high microsatellite instability from the rest. C) tSNE plots of samples generated using top MSI-predictive LFs (5 LF per MSI class) colored by MSI status D) tSNE plots of samples colored by MAUI latent factor (‘LF95’) which is most predictive of MSI-H samples."
 ```
 
