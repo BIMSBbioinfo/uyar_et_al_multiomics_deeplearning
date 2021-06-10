@@ -1483,6 +1483,11 @@ compute_geneset_enrichment <- function(genes, geneSets, background = NULL) {
   return(res)
 }
 
+# function to score a gene set
+score_gene_set <- function(rankData, genes_up, gene_down = NULL) {
+  scores <- singscore::simpleScore(rankData, upSet = genes_up)
+  return(scores$TotalScore)
+}
 
 
 
