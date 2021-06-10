@@ -126,7 +126,6 @@ plot_datatype_contribution_by_factor <- function(LFs, FWs, tool, project, dataty
 
 ```{r pancancer_prediction, fig.height=9, fig.width=12}
 # Find out if cancer types are predictable using latent factors 
-
 res <- sapply(simplify = F, names(LFs), function(tool) {
   message(date(), " => ", tool)
   M <- LFs[[tool]]$pancancer.cnv_gex_meth_mut
@@ -147,13 +146,16 @@ p1 <- ggplot(dt, aes(x = Var2, y = value)) +
         axis.text = element_text(size = 14), axis.title = element_text(size = 16))
 
 # performance visualisation
-m <- as.matrix(table(res$maui_factors$pred, res$maui_factors$obs))
-p2 <- pheatmap(apply(m, 1, function(x) round(x/sum(x) * 100, 1)), cluster_rows = F, cluster_cols = F, 
-         display_numbers = T, number_format = "%.1f", silent = T)
+#m <- as.matrix(table(res$maui_factors$pred, res$maui_factors$obs))
+#p2 <- pheatmap(apply(m, 1, function(x) round(x/sum(x) * 100, 1)), cluster_rows = F, cluster_cols = F, 
+#         display_numbers = T, number_format = "%.1f", silent = T)
 
 # plot cancer specific factors
 M <- LFs$maui_factors$pancancer.cnv_gex_meth_mut
 ct <- surv[match(rownames(M), bcr_patient_barcode)]$project
+
+p2 <- plot_tsne(M, ct, show.labels = T) + 
+  theme(legend.position = 'none')
 
 p3 <- plot_label_specific_vars(M, ct)
 
@@ -162,10 +164,13 @@ p4 <- plot_datatype_contribution_by_factor(LFs, FWs, 'maui_factors',
                                            'pancancer', 'cnv_gex_meth_mut', factors = ct, 
                                            top_lfs = 1, top_features = 100) 
 p4 <- p4 + labs(y = 'Relative Contribution\nto top latent factor') + 
-  theme(legend.position = 'right', legend.background = element_blank())
+  theme(legend.position = 'top', legend.background = element_blank(), 
+        legend.title = element_blank())
 
-Fig <- plot_grid(plot_grid(p1, p2$gtable, nrow = 1, labels = c('A', 'B')), 
-                  plot_grid(p3, p4, nrow = 1, labels = c('C', 'D')), 
+Fig <- plot_grid(plot_grid(p1, p2, nrow = 1, labels = c('A', 'B'),
+                           rel_widths = c(1,2)), 
+                  plot_grid(p4, p3, nrow = 1, labels = c('C', 'D'), 
+                            rel_widths = c(1,2)), 
                   nrow = 2,
                   rel_heights = c(2,3))
 
@@ -174,7 +179,7 @@ Figures[[fig_count]] <- Fig
 fig.name <- paste0('Figure', fig_count, '.pancancer_cancer_type_prediction.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name),
-              plot = Fig, units = 'in', width = 12, height = 9)
+              plot = Fig, units = 'in', width = 12, height = 12)
 Legends[[fig_count]] <- "Predictive power of latent factors in distinguishing cancer types. A-B) comparing maui with PCA/MOFA/MCIA. AUC: Area under the ROC curve computed on the test dataset (30% of held-out data) trained on 70% of the dataset using a Random Forest model. Each point represents one cancer type (pairwise one-sided Wilcoxon test on AUCs, alternative = maui AUC is not greater than others) C) Adjusted Mutual Information (AMI) value computed by comparing unsupervised clustering labels (k-means algorithm, k set to 21) with the cancer types. D) Top maui LFs detected per cancer type. Size/color/opacity of the points represent the average neural activation value of the LF for the corresponding cancer type samples. E) Percentage of top feature types contributing to top predictive maui latent factor per cancer type."
 
 ```
@@ -186,7 +191,7 @@ Legends[[fig_count]] <- "Predictive power of latent factors in distinguishing ca
 
 multi_omics_comb <- 'cnv_gex_meth_mut'
 experiments <- grep(paste0('^TCGA-.*.', multi_omics_comb), names(LFs$pca_factors), value = T)
-cl <- parallel::makeCluster(10)
+cl <- parallel::makeCluster(20)
 parallel::clusterExport(cl, varlist = c('LFs', 'experiments', 'settings'))
 cluster.stats <- do.call(rbind, sapply(simplify = F, names(LFs), function(tool) {
   message("Clustering top ",tool)
@@ -198,10 +203,9 @@ cluster.stats <- do.call(rbind, sapply(simplify = F, names(LFs), function(tool) 
     library(data.table)
     M <- LFs[[tool]][[experiment]]
     if(tool == 'maui_factors') {
-      #M <- remove_redundant_variables(M, perc = 99) 
-      M <- scale(M)
+      # to avoid highly correlated maui LFs to dominate clusters
+      M <- scale(t(remove_redundant_variables(t(M))))
     } 
-    
     # try topN from 5 to 25 (each tool may capture different amount of information 
     # by varying number of factors)
     stats <- do.call(rbind, lapply(seq(5, min(20, ncol(M)), 5), function(n) {
@@ -238,7 +242,7 @@ comps <- lapply(setdiff(unique(dt1$method), 'MAUI'), function(x) c('MAUI', x))
 
 p1 <- ggboxplot(dt1, 
           x = 'method', y = 'score', add = 'jitter', color = 'method') + 
-  stat_compare_means(method = 'wilcox.test', paired = FALSE, #todo change to true when mofa is finished
+  stat_compare_means(method = 'wilcox.test', paired = TRUE, 
                      comparisons = comps) + 
   labs(title = 'Silhouette score', x = '') + 
   theme(legend.position = 'none')
@@ -251,7 +255,7 @@ dt2$method <- toupper(gsub("_factors", "", dt2$method))
 comps <- lapply(setdiff(unique(dt2$method), 'MAUI'), function(x) c('MAUI', x))
 p2 <- ggboxplot(dt2, 
           x = 'method', y = 'score', add = 'jitter', color = 'method') + 
-  stat_compare_means(method = 'wilcox.test', paired = FALSE,  #todo change to true when mofa is finished
+  stat_compare_means(method = 'wilcox.test', paired = TRUE,  
                      comparisons = comps) + 
   labs(title = 'Cluster Stability Score (APN)', x = '') + 
   theme(legend.position = 'none')
