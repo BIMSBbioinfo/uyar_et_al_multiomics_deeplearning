@@ -261,9 +261,10 @@ p2 <- ggboxplot(dt2,
   theme(legend.position = 'none')
 
 # survival prediction accuracy benchmarking
-# find survival-predictive LFs by univariate cox models and use them in RSF
+# find survival-predictive LFs by fitting an initial RSF and use 
+# top factors for a final model to compute Harrel's c-index
 clin_factors <- c('age_at_initial_pathologic_diagnosis', 'gender', 'ajcc_pathologic_tumor_stage')
-cl <- parallel::makeCluster(10)
+cl <- parallel::makeCluster(20)
 parallel::clusterExport(cl, varlist = c('LFs', 'experiments', 'settings', 'surv', 'clin_factors'))
 surv.stats <- do.call(rbind, sapply(simplify = F, names(LFs), function(tool) {
   message("survival benchmark for ",tool)
@@ -323,7 +324,7 @@ Fig <- plot_grid(plot_grid(p1, p2, labels = c('A', 'B'), nrow = 1),
 
 fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
-fig.name <- paste0('Figure', fig_count, '.cluster_stability_metrics.pdf')
+fig.name <- paste0('Figure', fig_count, '.cohort_based_metrics.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name),        
        plot = Fig, units = 'in', 
@@ -339,8 +340,8 @@ Legends[[fig_count]] <- "Comparison of unsupervised clustering performances base
 
 # factors to use in the model
 clin_factors <- c('age_at_initial_pathologic_diagnosis', 'gender', 'ajcc_pathologic_tumor_stage')
-event <- 'OS'
-time <- 'OS.time'
+event <- 'PFI'
+time <- 'PFI.time'
 
 experiments <- grep('^TCGA-.*.cnv_gex_meth_mut', names(LFs$maui_factors), value = T)
 cl <- parallel::makeCluster(20)
@@ -555,41 +556,51 @@ MSI <- do.call(rbind, lapply(projectDict$`pan-gastrointestinal`, function(pr) {
 # remove samples with undertermined MSI status
 MSI <- MSI[MSI %in% c('MSI-H', 'MSI-L', 'MSS')]
 
+dt <- do.call(rbind, lapply(names(LFs), function(tool) {
+  M <- LFs[[tool]][['pan-gastrointestinal.cnv_gex_meth_mut']]
+  y <- MSI[match(rownames(M), bcr_patient_barcode)]$MSI
+  M <- M[!is.na(y),]
+  y <- y[!is.na(y)]
+  
+  # find LFs predictive of MSI 
+  dt <- get_factor_specific_variables(M, y)
+  dt$tool <- tool
+  return(dt)
+}))
+
+# compare top predictive factors across tools
+dt$tool <- toupper(gsub("_factors", "", dt$tool))
+p1 <- ggplot(dt[,.SD[which.min(padj)],by = c('ref_cl', 'tool')], 
+       aes(x = ref_cl, y = -log10(padj))) + 
+  geom_bar(stat = 'identity', aes(fill = tool), position = 'dodge') +
+  geom_hline(yintercept = -log10(0.05)) + 
+  coord_flip() + 
+  theme(legend.title = element_blank(), axis.title.y = element_blank(), 
+        plot.title = element_text(hjust = 0.5))
+
+# focus on maui LFs to visualize MSI status-related LFs
 M <- LFs$maui_factors[['pan-gastrointestinal.cnv_gex_meth_mut']]
-M <- scale(M) #remove_redundant_variables(M, perc = 99)
 y <- MSI[match(rownames(M), bcr_patient_barcode)]$MSI
 M <- M[!is.na(y),]
 y <- y[!is.na(y)]
-
-res <- predict_cluster_labels_glmnet(M, y)
-p1 <- ggplot(res, aes(x = label, y = auc)) +
-  geom_bar(stat = 'identity', aes(fill = label)) + 
-  labs(y = 'AUC', x = '') +
-  geom_errorbar(aes(ymin = auc.lower, ymax = auc.upper), width = 0.2)+
-  theme(legend.title = element_blank())
-
-# also plot a roc curve
-rocs <- predict_cluster_labels_glmnet(M, y, returnROC = TRUE)
-p2 <- plot_roc_list(rocs)
-
-# explore MSI related LFs
-# tsne plot of top LF related to MSI-H and MSI classes
-dt <- get_factor_specific_variables(M, y)
-# use top predictive lfs to guide tsne 
-top_vars <- unique(get_top_by_label(dt[padj < 0.05][order(padj)], 'ref_cl', 10)[['variable']])
-
+top_vars <- unique(get_top_by_label(dt[tool=='MAUI'][padj < 0.05][order(padj)], 'ref_cl', 10)[['variable']])
 df <- plot_tsne(M[,top_vars], y, returnData = T)
-# color tsne by top lf informative for MSI-H
 top_lf <- dt[order(padj)][ref_cl == 'MSI-H']$variable[1]
 df <- merge(df, data.frame(M[,top_lf,drop =F]), by = 'row.names')
-df$cancertype <- surv[match(df$Row.names, bcr_patient_barcode)]$project
-df$subtype <- tcga_subtypes[match(df$Row.names, bcr_patient_barcode)]$Subtype_Selected
+p2 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + 
+    geom_point(aes(color = as.factor(group))) + 
+    theme(legend.title = element_blank())
+p3 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + 
+    geom_point(aes_string(color = top_lf)) + 
+    scale_color_gradient(low = 'gray', high = 'red')
 
-p3.1 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + geom_point(aes(color = as.factor(group))) + 
-  theme(legend.title = element_blank())
-p3.2 <- ggplot(df, aes(x = tSNE1, y = tSNE2)) + 
-  geom_point(aes_string(color = top_lf)) + 
-  scale_color_gradient(low = 'gray', high = 'red')
+p4 <- ggboxplot(df, x = 'group', y = top_lf, color = 'group', 
+          add = 'jitter') + theme(legend.position = 'none', 
+                                  axis.title.x = element_blank())
+
+# plot a roc curve
+rocs <- predict_cluster_labels_glmnet(M, y, returnROC = TRUE)
+p5 <- plot_roc_list(rocs)
 
 # top features that contribute to top factors relevant to MSI status prediction
 f <- data.table::fread(file.path(inputDir, 'maui_factors', 
@@ -615,15 +626,14 @@ freq <- do.call(rbind, lapply(0:29, function(i) {
   x$ind <- i
   return(x)
 }))
-p4 <- ggplot(freq[freq$ind < 5,], aes(x = reorder(rank, ind), y = Freq)) + 
+p6 <- ggplot(freq[freq$ind < 5,], aes(x = reorder(rank, ind), y = Freq)) + 
   geom_bar(aes(fill = Var1), stat='identity') + 
   theme(legend.title = element_blank(), axis.text.x = element_text(angle = 45)) + 
   labs(x = paste0("top features contributing to ",top_lf)) 
   
 
-Fig <- cowplot::plot_grid(plot_grid(p1, p2, ncol = 1, labels = c('A', 'B')),
-                          plot_grid(p3.1, p3.2, p4, ncol = 1, labels = c('C', 'D', 'E')),
-                          nrow = 1)
+Fig <- cowplot::plot_grid(p1, p5, p2, p3, p4, p6,
+                          nrow = 3)
 fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
 fig.name <- paste0('Figure', fig_count, '.MSI.status.pdf')
