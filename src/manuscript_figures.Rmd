@@ -13,6 +13,7 @@ params:
 knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = FALSE)
 knitr::opts_knit$set(root.dir = params$workdir)
 settings <- yaml::read_yaml(params$settings_file)
+message(settings$GDCdataDir)
 FigureFolder <- params$figures_folder
 source(settings$utility_script)
 library(data.table)
@@ -27,6 +28,7 @@ library(ComplexHeatmap)
 library(pheatmap)
 library(survminer)
 library(survival)
+library(caret)
 theme_set(ggpubr::theme_pubclean())
 geneSetScoresFolder <- '/data/local/buyar/arcas/subtyping_paper/data/geneset_scores/singscore'
 
@@ -180,7 +182,7 @@ fig.name <- paste0('Figure', fig_count, '.pancancer_cancer_type_prediction.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name),
               plot = Fig, units = 'in', width = 12, height = 12)
-Legends[[fig_count]] <- "Predictive power of latent factors in distinguishing cancer types. A-B) comparing maui with PCA/MOFA/MCIA. AUC: Area under the ROC curve computed on the test dataset (30% of held-out data) trained on 70% of the dataset using a Random Forest model. Each point represents one cancer type (pairwise one-sided Wilcoxon test on AUCs, alternative = maui AUC is not greater than others) C) Adjusted Mutual Information (AMI) value computed by comparing unsupervised clustering labels (k-means algorithm, k set to 21) with the cancer types. D) Top maui LFs detected per cancer type. Size/color/opacity of the points represent the average neural activation value of the LF for the corresponding cancer type samples. E) Percentage of top feature types contributing to top predictive maui latent factor per cancer type."
+Legends[[fig_count]] <- "Predictive power of latent factors in distinguishing cancer types. A) comparing MAUI with PCA/MOFA/MCIA. Mean Balanced Accuracy computed on the test dataset (30% of held-out data) trained on 70% of the dataset using an Elastic Net multi-class model. B) tSNE plot of MAUI latent factors learned from pan-cancer dataset  C) Percentage of top feature types contributing to top predictive maui latent factor per cancer type. D) Top maui LFs detected per cancer type. Size/color/opacity of the points represent the average neural activation value of the LF for the corresponding cancer type samples."
 
 ```
 
@@ -329,7 +331,7 @@ names(Figures)[fig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name),        
        plot = Fig, units = 'in', 
        width = 10, height = 10)
-Legends[[fig_count]] <- "Comparison of unsupervised clustering performances based on cluster homogeneity (Silhouette) in A) and cluster stability (Average Proportion of Non-Overlap (APN) in B). Each point represents a clustering score for 132 k-means clustering results (21 cancer types x for 6 different values of k from 3 to 8) based on the top 10 LFs/PCs derived from each tool. C) Same as in panels A and B), but split by the value of k used in clustering. D) Survival outcome prediction accuracy for 21 cancer types by each tool's top 10 survival-related factors based on Overall Survival or Progression Free Survival endpoints."
+Legends[[fig_count]] <- "Comparison of unsupervised clustering performances based on cluster homogeneity (Silhouette) in A) and cluster stability (Average Proportion of Non-Overlap (APN) in B). Each point represents a clustering score for 132 k-means clustering results (21 cancer types x for 6 different values of k from 3 to 8) for each tool. C-D) Survival outcome prediction accuracy for 21 cancer types by each tool's top 10 survival-related factors based on Overall Survival (in C) or Progression Free Survival endpoints. (in D)."
 ```
 
 
@@ -463,7 +465,7 @@ fig.name <- paste0('Figure', fig_count, '.surv.Cindex_improv.hazard_ratio.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, width = 12, height = 14, units = 'in')
-Legends[[fig_count]] <- "Using MAUI LFs for survival prediction. A) Harrell’s C-index computed using only clinical factors (tumor stage + age + gender) or using clinical factors along with survival-predictive MAUI LFs. B) Hazard ratios of top LFs picked for each cancer adjusted for clinical factors (tumor stage + age + gender). Kaplan-Meier survival curves adjusted for clinical factors (tumor stage + age + gender) stratified by the neural activation values of top survival-predictive LFs per cancer."
+Legends[[fig_count]] <- "Using MAUI LFs for progression-free survival prediction. A) Harrell’s C-index computed using only clinical factors (tumor stage + age + gender) or using clinical factors along with survival-predictive MAUI LFs. B) Hazard ratios of top LFs picked for each cancer adjusted for clinical factors (tumor stage + age + gender). C) Kaplan-Meier survival curves adjusted for clinical factors (tumor stage + age + gender) stratified by the neural activation values of top survival-predictive LFs per cancer."
 ```
 
 
@@ -538,7 +540,7 @@ fig.name <- paste0('Figure', fig_count, '.clinical_factors.LFs.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, units = 'in', width = 12, height = 9)
-Legends[[fig_count]] <- "A) Top significant (padj < 0.05) clinical factor-associated LFs per cancer type. B) Example case: top LFs associated with each histological subtype of TCGA-SARC. C) Example case: top LFs associated with each histological grade of TCGA-HNSC."
+Legends[[fig_count]] <- "A) Top significant (padj < 0.05) clinical factor-associated LFs per cancer type. B) Example case: top LFs associated with each gender groups of TCGA-THCA cohort. C) Example case: top LFs associated with each histological types of TCGA-UCEC."
 ```
 
 ```{r msi_stats, fig.width=10, fig.height=8}
@@ -640,7 +642,7 @@ fig.name <- paste0('Figure', fig_count, '.MSI.status.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, units = 'in', width = 12, height = 12)
-Legends[[fig_count]] <- "Predicting MSI status of pan-gastrointestinal tumors using MAUI latent factors. A) AUC values for predicting MSI status using MAUI LFs B) Top features that contribute to MAUI latent factor (‘LF95’) that is the most predictive latent factor in distinguishing samples with high microsatellite instability from the rest. C) tSNE plots of samples generated using top MSI-predictive LFs (5 LF per MSI class) colored by MSI status D) tSNE plots of samples colored by MAUI latent factor (‘LF95’) which is most predictive of MSI-H samples."
+Legends[[fig_count]] <- "Latent factors predictive of MSI status (high: MSI-H, stable: MSI-S, low: MSI-L) in pan-gastrointestinal cancers A) Comparison of top latent factor per MSI status for each tool in terms of adjusted p-values reflecting the differences between MSI subgroups. B) ROC curves for prediction accuracy of MSI status using MAUI latent factors C) tSNE plots of samples generated using top MSI-predictive LFs (5 LF per MSI class) colored by MSI status D) tSNE plots of samples colored by MAUI latent factor LF25, which is most predictive of MSI-H samples. E) Distribution of MAUI latent factor LF25 across MSI subgroups in the pan-gastrointestinal cancer samples. F) Relative abundance of omics feature types among the top 500 features contributing to MAUI latent factor LF25."
 ```
 
 ```{r}
@@ -715,7 +717,7 @@ ggsave(filename = file.path(FigureFolder, fig.name),
        Fig, units = 'in', 
        width = 10, height = 12)
 Legends[[fig_count]] <- "Classification of Non-Small-Cell Lung Adenocarcinoma samples using MAUI latent factors.
-A) ROC curves with AUC values on testing data (40% of the dataset) trained on Elastic Net with 5-fold cross-validation. B) t-SNE plot of MAUI LFs colored by cancer types. C) t-SNE plot of MAUI LFs colored by 
+A) ROC curves with AUC values on testing data (40% of the dataset) using an Elastic Net model with 5-fold cross-validation. B) t-SNE plot of MAUI LFs colored by cancer types. C) t-SNE plot of MAUI LFs colored by 
 the top most-predictive latent factor for TCGA-LUSC samples. D) t-SNE plot of MAUI LFs colored by the top 
 most predictive latent factor for TCGA-LUAD samples. E) Percentage of top 500 contributing features each of the top most predictive latent factors broken down into categories by cancer type and data type. F) Cancer Cell State score distribution of samples grouped by whether the sample has a higher score for LUSC-predictive latent factor than the LUAD-predictive latent factor."
 ```
@@ -788,7 +790,7 @@ names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        Fig, units = 'in', 
        width = 10, height = 12)
-Legends[[fig_count]] <- "Clustering of pan-gastrointestinal tumors guided by TCGA subtypes. Subtype specific MAUI LFs are used to cluster the samples, which yields better survival curves as shown in C,D). Clusters are annotated using pathway activity scores (top cluster associated cancer hallmarks)."
+Legends[[fig_count]] <- "Clustering of pan-gastrointestinal tumors guided by TCGA subtypes using subtype-specific MAUI latent factors. A) tSNE plot of using MAUI latent factors for pan-gastrointestinal cancers colored by MAUI clusters, B) tSNE plot of using MAUI latent factors for pan-gastrointestinal cancers colored by known TCGA subtypes C) progression-free survival curves for MAUI-based clusters and D) known TCGA subtypes. E-F) Gene-set activity scores of annotated cancer hallmarks gene sets enriched for each MAUI-based cluster in E) and known TCGA subtypes in F)."
 ```
 
 ```{r semi_supervised_survival, fig.width=10, fig.height=12}
@@ -925,7 +927,7 @@ names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, units = 'in', 
        width = 10, height = 12)
-Legends[[fig_count]] <- "Log-rank test of prognostic subtypes by MAUI and existing TCGA subtypes. B) tSNE plot of MAUI LFs that are predictive of survival outcomes for TCGA-UCEC. C) Kaplan-Meier curve of the best/worst surviving prognostic MAUI clusters D) Biological pathway scores that distinguish best/worst surviving clusters."
+Legends[[fig_count]] <- "A) Log-rank test of prognostic subtypes by MAUI and annotated TCGA subtypes. B) tSNE plot of MAUI LFs that are predictive of survival outcomes for TCGA-PRAD. C) Kaplan-Meier curve of the best/worst surviving prognostic MAUI clusters D) Biological pathway scores that distinguish best/worst surviving clusters."
 ```
 
 
@@ -1130,10 +1132,7 @@ ggsave(filename = file.path(FigureFolder, fig.name),
        plot = Fig, units = 'in', 
        width = 12, height = 14)
 Legends[[fig_count]] <- "Predicting responders to anti-PD-L1 treatment in a cohort of Metastatic Urothelial
-Cancers (N=348) using MAUI. A) AUC curve for predicting Complete/Partial Responders (CR/PR) to the anti-PD-L1
-treatment using an Elastic Net Model on a subset of MAUI latent factors individually predictive of treatment response groups. B) Average activation score of top latent factors predictive of treatment response groups. C) Top pathways enriched among top 100 genes that contribute to the top latent factor (LF44). D) Survival stratification of the 
-cohort based activation score of LF44 (high = LF44 > 1.4, low = LF44 < 1.4). E) Top 10 genes contributing to LF44
-F) Correlation between LF44 activation score and the tumor (neo-antigen) mutation burden"
+Cancers (N=348) using MAUI. A) Comparison of top latent factors predictive of complete/partial response (CR/PR) to the anti-PD-L1. B) Comparison of top latent factors with respect to their correlation with tumor mutation burden status of the samples in the cohort C) Comparison of top latent factors predictive of immune phenotypes (inflamed/excluded/desert). D) Top MAUI LFs predictive of response to anti-PD-L1 response groups. E) Survival stratification of the cohort based activation score of LF44 (high = LF44 > 1.4, low = LF44 < 1.4). F) Top pathways enriched among top 100 genes that contribute to the top latent factor (LF44). G) Top 10 genes contributing to LF44"
 ```
 
 
