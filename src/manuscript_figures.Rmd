@@ -276,118 +276,11 @@ Legends[[fig_count]] <- "Comparison of unsupervised clustering performances base
 ```
 
 
-```{r survival_factors, fig.width=12, fig.height=8}
-# survival-predictive factors
-#I look for survival-predictive maui LFs, show how much c-index improves on top of 
-#clinical factors (tumor stage/age/gender) and plot top survival-predictive factor per cancer.
+```{r clinical_survival_factors, fig.width=12, fig.height=8}
+# here we compute LFs associated to clinical factors (e.g. tumor stage, gender etc) and 
+# survival outcomes (PFI)
 
-# factors to use in the model
-clin_factors <- c('age_at_initial_pathologic_diagnosis', 'gender', 'ajcc_pathologic_tumor_stage')
-event <- 'PFI'
-time <- 'PFI.time'
-
-experiments <- grep('^TCGA-.*.cnv_gex_meth_mut', names(LFs$maui_factors), value = T)
-cl <- parallel::makeCluster(20)
-parallel::clusterExport(cl, varlist = c('LFs', 'clin_factors', 'event', 'time',
-                                        'surv', 'experiments', 'settings'))
-surv.stats <- pbapply::pbsapply(cl = cl, simplify = F, experiments, function(experiment) {
-  require(data.table)
-  require(survminer)
-  require(survival)
-  source(settings$utility_script)
-  message(experiment)
-  M <- LFs$maui_factors[[experiment]]
-  # get clinical factors for the patients in matrix
-  clin <- process_clinical_covariates(rownames(M))
-  clin <- subset(clin, select = intersect(colnames(clin), clin_factors))
-  # first filter variables by importance 
-  fit <- fit_RSF(surv, M, 500, time, event)
-  vars <- names(head(sort(fit$importance, decreasing = T), 5))
-    
-  # compute adjusted survival curve for thb top factor
-  v <- vars[1] 
-  dat <- merge(clin, M[,v,drop = F], by = 'row.names')
-  rownames(dat) <- dat$Row.names
-  dat$Row.names <- NULL
-  dat <- get_surv_df(surv, dat, event, time)
-
-  # split variable into high/low to compute survival adjusted curves
-  cp <- find_survival_cutpoint(dat[,v,drop=F], surv, event_col = event, duration_col = time)
-  dat[,v] <- ifelse(dat[,v] > cp, paste(v, 'high'), paste(v, 'low'))
-  cox2 <- coxph(Surv(time,status) ~ ., 
-                data=dat, x = TRUE)
-  p <- survminer::ggadjustedcurves(fit = cox2, data = dat, variable = v, method = 'average')
-  
-  # compute Cindex with all survival-predictive LFs and without LFs 
-  rsf_stats <- fit_RSF_clin(get_surv_df(surv, clin, event, time), 
-                            M[,vars], ntree = 1000)
-  
-  return(list('p' = p, 
-              'Cindex_base' = rsf_stats$C_wo, 
-              'Cindex_with_LFs' = rsf_stats$C_with))
-  return(NULL)
-})
-parallel::stopCluster(cl)
-
-# combine adjusted survival curve plots into a single plot
-plots <- sapply(simplify = F, names(surv.stats), function(x) {   
-  p <- surv.stats[[x]][['p']] 
-  if(!is.null(p)) { 
-    p + theme(axis.text.x = element_text(size = 8), 
-              axis.text.y = element_text(size = 8), 
-              axis.title.x = element_blank(), 
-              axis.title.y = element_blank(), 
-              legend.title = element_blank(),
-              legend.position = c(0.5, 0.9),
-              legend.text = element_text(size = 8), 
-              legend.background = element_blank(), 
-              legend.direction = 'vertical') 
-    }
-})
-plots <- plots[!sapply(plots, is.null)]
-p1 <- cowplot::plot_grid(plotlist = plots, nrow = 3, 
-                   labels = sapply(strsplit(names(plots), '\\.'), function(x) x[1]), 
-                   label_size = 8)
-
-# make a plot to show improvement in C index with LFs on top of clinical factors
-ci <- do.call(rbind, lapply(names(surv.stats), function(x) {
-  if(is.null(surv.stats[[x]])) {return(NULL)}
-  df <- data.frame('base' = surv.stats[[x]][['Cindex_base']], 
-                   'with_lf' = surv.stats[[x]][['Cindex_with_LFs']], 
-                   'project' = unlist(strsplit(x, '\\.'))[[1]])
-  return(df)
-}))
-
-dt <- melt(ci, id.vars = 'project')
-dt$variable <- ifelse(dt$variable == 'base', 'Only clinical factors', 'Clinical factors + MAUI LFs')
-
-p3 <- ggplot(ci, aes(x = reorder(project, with_lf))) + 
-  geom_segment(aes(x = reorder(project, with_lf), xend = project, 
-                   y = base, yend = with_lf)) + 
-  geom_point(data = dt, aes(x = project, y = value, color = variable), size = 2) +
-  coord_flip() + 
-  labs(x = '', y = '') + 
-  theme(legend.title = element_blank(), legend.position = 'bottom', 
-        legend.background = element_blank(), 
-        legend.margin = margin(), 
-        legend.direction = 'vertical', legend.box.background = element_blank()) +
-  scale_color_brewer(type = 'qual', palette = 6)
-
-Fig <- cowplot::plot_grid(cowplot::plot_grid(p3, p2, nrow = 1, labels = c('A', 'B')),
-                        p1, labels = c('', 'C'), nrow = 2)
-
-fig_count <- fig_count + 1
-Figures[[fig_count]] <- Fig
-fig.name <- paste0('Figure', fig_count, '.surv.Cindex_improv.hazard_ratio.pdf')
-names(Figures)[fig_count] <- fig.name
-ggsave(filename = file.path(FigureFolder, fig.name), 
-       plot = Fig, width = 12, height = 14, units = 'in')
-Legends[[fig_count]] <- "Using MAUI LFs for progression-free survival prediction. A) Harrell’s C-index computed using only clinical factors (tumor stage + age + gender) or using clinical factors along with survival-predictive MAUI LFs. B) Hazard ratios of top LFs picked for each cancer adjusted for clinical factors (tumor stage + age + gender). C) Kaplan-Meier survival curves adjusted for clinical factors (tumor stage + age + gender) stratified by the neural activation values of top survival-predictive LFs per cancer."
-```
-
-
-```{r clinical_factors, fig.width=12, fig.height=9}
-# clinical factor associated MAUI LFs
+## 1. clinical factor associated MAUI LFs
 # Find maui LFs associated to clinical factors and plot them
 
 experiments <- grep('^TCGA-.*.cnv_gex_meth_mut', names(LFs$maui_factors), value = T)
@@ -431,34 +324,125 @@ p1 <- ggplot(dt, aes(x = project, y = label)) +
   scale_color_gradient(low = 'blue', high = 'red') + 
   labs(x = '', y = 'clinical factor')
 
-# pick example cases and show more detailed LF activation 
-# top examples by clinical factor type
-# top 5 variables per clinical factor 
-top <- clin.stats[padj < 0.05,.SD[which.min(padj)], by = label][order(padj),.SD[which.min(padj)],by = project]
-plots <- sapply(simplify = FALSE, 1:4, function(i) {
-  pr <- top$project[i]
-  l <- top$label[i]
-  M <- LFs$maui_factors[[paste0(pr, '.cnv_gex_meth_mut')]]
-  factors <- process_clinical_covariates(rownames(M))[[l]]
-  M <- M[!is.na(factors),]
-  factors <- factors[!is.na(factors)]
-  plot_label_specific_vars(M, factors, string_width = 24)+ 
-    labs(title = pr, subtitle = l) + 
-    theme(legend.position = 'none')
+# 2. survival-predictive factors
+#I look for survival-predictive maui LFs, show how much c-index improves on top of 
+#clinical factors (tumor stage/age/gender) and plot top survival-predictive factor per cancer.
+
+# factors to use in the model
+clin_factors <- c('age_at_initial_pathologic_diagnosis', 'gender', 'ajcc_pathologic_tumor_stage')
+event <- 'PFI'
+time <- 'PFI.time'
+
+experiments <- grep('^TCGA-.*.cnv_gex_meth_mut', names(LFs$maui_factors), value = T)
+cl <- parallel::makeCluster(10)
+parallel::clusterExport(cl, varlist = c('LFs', 'clin_factors', 'event', 'time',
+                                        'surv', 'experiments', 'settings'))
+surv.stats <- pbapply::pbsapply(cl = cl, simplify = F, experiments, function(experiment) { 
+  require(data.table)
+  require(survminer)
+  require(survival)
+  source(settings$utility_script)
+  message(experiment)
+  M <- LFs$maui_factors[[experiment]]
+  # get clinical factors for the patients in matrix
+  clin <- process_clinical_covariates(rownames(M))
+  clin <- subset(clin, select = intersect(colnames(clin), clin_factors))
+  # first filter variables by importance 
+  fit <- fit_RSF(surv, M, 500, time, event)
+  vars <- names(head(sort(fit$importance, decreasing = T), 5))
+    
+  # compute adjusted survival curve for thb top factor
+  v <- vars[1] 
+  dat <- merge(clin, M[,v,drop = F], by = 'row.names')
+  rownames(dat) <- dat$Row.names
+  dat$Row.names <- NULL
+  dat <- get_surv_df(surv, dat, event, time)
+
+  # split variable into high/low to compute survival adjusted curves
+  cp <- find_survival_cutpoint(dat[,v,drop=F], surv, event_col = event, duration_col = time)
+  dat[,v] <- ifelse(dat[,v] > cp, paste(v, '>', round(cp, 1)), paste(v, '<=', round(cp, 1)))
+  cox2 <- coxph(Surv(time,status) ~ ., 
+                data=dat, x = TRUE)
+  p <- survminer::ggadjustedcurves(fit = cox2, data = dat, variable = v, method = 'average')
+  
+  # compute Cindex with all survival-predictive LFs and without LFs 
+  rsf_stats <- fit_RSF_clin(get_surv_df(surv, clin, event, time), 
+                            M[,vars], ntree = 1000)
+  
+  return(list('p' = p, 
+              'Cindex_base' = rsf_stats$C_wo, 
+              'Cindex_with_LFs' = rsf_stats$C_with))
 })
+parallel::stopCluster(cl)
 
-p2 <- cowplot::plot_grid(plotlist = plots[1:2], nrow = 2, labels = c('B', 'C'))
 
-Fig <- cowplot::plot_grid(p1, p2, rel_widths = c(3,2), labels = c('A'))
+# make a plot to show improvement in C index with LFs on top of clinical factors
+ci <- do.call(rbind, lapply(names(surv.stats), function(x) {
+  if(is.null(surv.stats[[x]])) {return(NULL)}
+  df <- data.frame('base' = surv.stats[[x]][['Cindex_base']], 
+                   'with_lf' = surv.stats[[x]][['Cindex_with_LFs']], 
+                   'project' = unlist(strsplit(x, '\\.'))[[1]])
+  return(df)
+}))
+
+dt <- melt(ci, id.vars = 'project')
+dt$variable <- ifelse(dt$variable == 'base', 'Only clinical factors', 'Clinical factors + MAUI LFs')
+
+p2 <- ggplot(ci, aes(x = reorder(project, with_lf))) + 
+  geom_segment(aes(x = reorder(project, with_lf), xend = project, 
+                   y = base, yend = with_lf)) + 
+  geom_point(data = dt, aes(x = project, y = value, color = variable), size = 2) +
+  coord_flip() + 
+  labs(x = '', y = '') + 
+  theme(legend.title = element_blank(), legend.position = 'bottom', 
+        legend.background = element_blank(), 
+        legend.margin = margin(), 
+        legend.direction = 'vertical', legend.box.background = element_blank()) +
+  scale_color_brewer(type = 'qual', palette = 6)
+
+Fig <- cowplot::plot_grid(cowplot::plot_grid(p1, p2, nrow = 2, labels = c('A', 'B')))
 
 fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
-fig.name <- paste0('Figure', fig_count, '.clinical_factors.LFs.pdf')
+fig.name <- paste0('Figure', fig_count, '.surv.Cindex_improv.hazard_ratio.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
-       plot = Fig, units = 'in', width = 12, height = 9)
-Legends[[fig_count]] <- "A) Top significant (padj < 0.05) clinical factor-associated LFs per cancer type. B) Example case: top LFs associated with each gender groups of TCGA-THCA cohort. C) Example case: top LFs associated with each histological types of TCGA-UCEC."
+       plot = Fig, width = 8.27, height = 11.69, units = 'in')
+Legends[[fig_count]] <- "Using MAUI LFs for progression-free survival prediction. A) Harrell’s C-index computed using only clinical factors (tumor stage + age + gender) or using clinical factors along with survival-predictive MAUI LFs. B) Hazard ratios of top LFs picked for each cancer adjusted for clinical factors (tumor stage + age + gender). C) Kaplan-Meier survival curves adjusted for clinical factors (tumor stage + age + gender) stratified by the neural activation values of top survival-predictive LFs per cancer."
+
+
+# combine adjusted survival curve plots into a single plot 
+plots <- sapply(simplify = F, names(surv.stats), function(x) {   
+  p <- surv.stats[[x]][['p']] 
+  if(!is.null(p)) { 
+    p + theme(axis.text.x = element_text(size = 8), 
+              axis.text.y = element_text(size = 8), 
+              axis.title.x = element_blank(), 
+              axis.title.y = element_blank(), 
+              legend.title = element_blank(),
+              legend.position = c(0.5, 0.9),
+              legend.text = element_text(size = 8), 
+              legend.background = element_blank(), 
+              legend.direction = 'vertical') 
+    }
+})
+plots <- plots[!sapply(plots, is.null)]
+p3 <- cowplot::plot_grid(plotlist = plots, nrow = 3, 
+                   labels = sapply(strsplit(names(plots), '\\.'), function(x) x[1]), 
+                   label_size = 8)
+
+# print p3 to supplements 
+supFig_count <- supFig_count + 1
+SuppFigures[[supFig_count]] <- p3
+fig.name <- paste0('SuppFigure', supFig_count, '.adjusted_survival_curves.pdf')
+names(SuppFigures)[supFig_count] <- fig.name
+ggsave(file.path(FigureFolder, fig.name), 
+              plot = Fig, units = 'in', width = 8.27, height = 11.69)
+SuppLegends[[supFig_count]] <- "Survival curves adjusted for tumor stage + age + gender based on a cutpoint of 
+top survival-associated LF per cancer cohort."
+
 ```
+
 
 ```{r msi_stats, fig.width=10, fig.height=8}
 # Predicting MSI status using latent factors
