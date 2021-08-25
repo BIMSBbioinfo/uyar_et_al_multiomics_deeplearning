@@ -304,41 +304,34 @@ surv.stats <- pbapply::pbsapply(cl = cl, simplify = F, experiments, function(exp
   fit <- fit_RSF(surv, M, 500, time, event)
   vars <- names(head(sort(fit$importance, decreasing = T), 5))
     
-  # compute hazard ratios for the top factor
+  # compute adjusted survival curve for thb top factor
   v <- vars[1] 
   dat <- merge(clin, M[,v,drop = F], by = 'row.names')
   rownames(dat) <- dat$Row.names
   dat$Row.names <- NULL
   dat <- get_surv_df(surv, dat, event, time)
-  # compute hazard ratios 
-  cox1 <- coxph(Surv(time,status) ~ ., 
-          data=dat, x = TRUE)
-  hr <- data.frame(summary(cox1)[['conf.int']]) # get hazard ratios with conf intervals
-  hr <- hr[grep(v, rownames(hr)), c(1,3,4)]
-  colnames(hr) <- c('hr', 'hr_low', 'hr_high')
-  rownames(hr) <- v
-  p1 <- survminer::ggforest(cox1, data = dat)
-    
+
   # split variable into high/low to compute survival adjusted curves
   cp <- find_survival_cutpoint(dat[,v,drop=F], surv, event_col = event, duration_col = time)
   dat[,v] <- ifelse(dat[,v] > cp, paste(v, 'high'), paste(v, 'low'))
   cox2 <- coxph(Surv(time,status) ~ ., 
                 data=dat, x = TRUE)
-  p2 <- survminer::ggadjustedcurves(fit = cox2, data = dat, variable = v, method = 'average')
+  p <- survminer::ggadjustedcurves(fit = cox2, data = dat, variable = v, method = 'average')
   
   # compute Cindex with all survival-predictive LFs and without LFs 
   rsf_stats <- fit_RSF_clin(get_surv_df(surv, clin, event, time), 
                             M[,vars], ntree = 1000)
   
-  return(list('p1' = p1, 'p2' = p2, 'hr' = hr, 
-              'Cindex_base' = rsf_stats$C_wo, 'Cindex_with_LFs' = rsf_stats$C_with))
-  
+  return(list('p' = p, 
+              'Cindex_base' = rsf_stats$C_wo, 
+              'Cindex_with_LFs' = rsf_stats$C_with))
   return(NULL)
 })
 parallel::stopCluster(cl)
 
+# combine adjusted survival curve plots into a single plot
 plots <- sapply(simplify = F, names(surv.stats), function(x) {   
-  p <- surv.stats[[x]][['p2']] 
+  p <- surv.stats[[x]][['p']] 
   if(!is.null(p)) { 
     p + theme(axis.text.x = element_text(size = 8), 
               axis.text.y = element_text(size = 8), 
@@ -355,23 +348,6 @@ plots <- plots[!sapply(plots, is.null)]
 p1 <- cowplot::plot_grid(plotlist = plots, nrow = 3, 
                    labels = sapply(strsplit(names(plots), '\\.'), function(x) x[1]), 
                    label_size = 8)
-# plot hazard ratios for top LF per cancer type 
-hr <- do.call(rbind, lapply(names(surv.stats), function(x) {
-  if(is.null(surv.stats[[x]])) {return(NULL)}
-  message(x)
-  df <- surv.stats[[x]][['hr']]
-  df$project <- unlist(strsplit(x, '\\.'))[[1]]
-  return(df)
-}))
-hr$latent_factor <- rownames(hr)
-# remove hr with Inf values
-hr <- hr[!is.infinite(hr$hr_high),]
-
-p2 <- ggplot(hr, aes(x = reorder(paste0(project, ' (', latent_factor, ')'), hr), y = log(hr))) +
-  geom_bar(stat = 'identity') + 
-  geom_errorbar(aes(ymin = log(hr_low), ymax = log(hr_high)), width = 0.2) + 
-  labs(x = '', y = 'log(hazard-ratio) of top latent factor per cancer\n(adjusted for tumor stage + age + gender)')+
-  coord_flip()
 
 # make a plot to show improvement in C index with LFs on top of clinical factors
 ci <- do.call(rbind, lapply(names(surv.stats), function(x) {
