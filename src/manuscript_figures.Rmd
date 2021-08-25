@@ -262,65 +262,6 @@ p2 <- ggboxplot(dt2,
   labs(title = 'Cluster Stability Score (APN)', x = '') + 
   theme(legend.position = 'none')
 
-# survival prediction accuracy benchmarking
-# find survival-predictive LFs by fitting an initial RSF and use 
-# top factors for a final model to compute Harrel's c-index
-clin_factors <- c('age_at_initial_pathologic_diagnosis', 'gender', 'ajcc_pathologic_tumor_stage')
-cl <- parallel::makeCluster(20)
-parallel::clusterExport(cl, varlist = c('LFs', 'experiments', 'settings', 'surv', 'clin_factors'))
-surv.stats <- do.call(rbind, sapply(simplify = F, names(LFs), function(tool) {
-  message("survival benchmark for ",tool)
-  do.call(rbind, pbapply::pbsapply(cl = cl, simplify = F, experiments, function(experiment) {
-    message(experiment)
-    source(settings$utility_script)
-    require(data.table)
-    require(survminer)
-    M <- LFs[[tool]][[experiment]]
-    clin <- process_clinical_covariates(rownames(M))
-    clin <- subset(clin, select = intersect(colnames(clin), clin_factors))
-    # compute pfi stats
-    # fit a first model to filter variables 
-    fit <- fit_RSF(surv, M, ntree = 500, 'PFI.time', 'PFI')
-    # using a range of top variables, compute c index
-    dt1 <- do.call(rbind, lapply(2:10, function(i) {
-      vars <- names(head(sort(fit$importance, decreasing = T), i))
-      rsf_stats <- fit_RSF_clin(get_surv_df(surv, clin, 'PFI', 'PFI.time'), 
-                                M[,vars], ntree = 500)
-      dt <- data.table('cindex.base' = rsf_stats$C_wo, 'cindex' = rsf_stats$C_with, 
-                       'experiment' = experiment, 'method' = tool, 'topN' = i)
-    }))
-    dt1$endpoint <- 'PFI'
-    # do the same for overall survival
-    fit <- fit_RSF(surv, M, ntree = 500, 'OS.time', 'OS')
-    dt2 <- do.call(rbind, lapply(2:10, function(i) {
-      vars <- names(head(sort(fit$importance, decreasing = T), i))
-      rsf_stats <- fit_RSF_clin(get_surv_df(surv, clin, 'OS', 'OS.time'), 
-                                M[,vars], ntree = 500)
-      dt <- data.table('cindex.base' = rsf_stats$C_wo, 'cindex' = rsf_stats$C_with, 
-                       'experiment' = experiment, 'method' = tool, 'topN' = i)
-    }))
-    dt2$endpoint <- 'OS'
-    return(rbind(dt1, dt2))
-  }))
-}))
-parallel::stopCluster(cl)
-
-dt <- surv.stats
-dt$method <- toupper(gsub("_factors", "", dt$method))
-dt$project <- unlist(sapply(strsplit(dt$experiment, "\\."), function(x) x[1]))
-dt$endpoint <- ifelse(dt$endpoint == 'PFI', 'Progression Free Survival', 
-                      'Overall Survival')
-# get best performance per tool per project
-dt <- dt[,.SD[which.max(cindex)], by = c('project', 'method', 'endpoint')]
-# PCA/MOFA win, compare against PCA
-comps <- lapply(setdiff(unique(dt$method), 'MAUI'), function(x) c('MAUI', x))
-p4 <- ggboxplot(dt, x = 'method', y = 'cindex', color = 'method',
-                add = 'jitter', facet.by = 'endpoint') +
-  stat_compare_means(method = 'wilcox.test', paired = TRUE,
-                     comparisons = comps) +
-  labs(y = "Harrel's C-index", x = '') +
-  theme(legend.position = 'none')
-
 Fig <- plot_grid(plot_grid(p1, p2, labels = c('A', 'B'), nrow = 1),
                  p4, nrow = 2, labels = c('', 'C'))
 
@@ -721,7 +662,6 @@ A) ROC curves with AUC values on testing data (40% of the dataset) using an Elas
 the top most-predictive latent factor for TCGA-LUSC samples. D) t-SNE plot of MAUI LFs colored by the top 
 most predictive latent factor for TCGA-LUAD samples. E) Percentage of top 500 contributing features each of the top most predictive latent factors broken down into categories by cancer type and data type. F) Cancer Cell State score distribution of samples grouped by whether the sample has a higher score for LUSC-predictive latent factor than the LUAD-predictive latent factor."
 ```
-
 
 ```{r}
 # Show subtypes depend on the objective (dependent variable) - they are dynamic, not universal or carved in stone 
