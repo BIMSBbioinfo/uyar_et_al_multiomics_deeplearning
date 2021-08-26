@@ -68,6 +68,13 @@ get_top_by_label <- function(dt, label.type, topN = 5) {
 ```
 
 ```{r pancancer_prediction, fig.height=9, fig.width=12}
+
+
+# In this section, we make figures about pan-cancer classification 
+# and some benchmarks of cohort-based unsupervised clustering across cancers
+
+
+# 1. pancancer classification
 # Find out if cancer types are predictable using latent factors 
 res <- sapply(simplify = F, names(LFs), function(tool) {
   message(date(), " => ", tool)
@@ -85,53 +92,36 @@ dt$Var2 <- toupper(gsub("_factors", "", dt$Var2))
 p1 <- ggplot(dt, aes(x = Var2, y = value)) + 
   geom_bar(stat = 'identity', aes(fill = Var2)) + 
   labs(y = 'Mean Balanced Accuracy') + 
-  theme(legend.title = element_blank(), axis.title.x = element_blank(), 
-        axis.text = element_text(size = 14), axis.title = element_text(size = 16))
+  theme(legend.position = 'none', axis.title.x = element_blank(), 
+        axis.text = element_text(size = 14), axis.title = element_text(size = 16)) + 
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.1))
 
-# performance visualisation
-#m <- as.matrix(table(res$maui_factors$pred, res$maui_factors$obs))
-#p2 <- pheatmap(apply(m, 1, function(x) round(x/sum(x) * 100, 1)), cluster_rows = F, cluster_cols = F, 
-#         display_numbers = T, number_format = "%.1f", silent = T)
+# performance visualisation - misclassified examples 
+m <- as.matrix(table(res$maui_factors$pred, res$maui_factors$obs))
+p2 <- pheatmap::pheatmap(apply(m, 1, function(x) round(x/sum(x) * 100, 1)), cluster_rows = F, cluster_cols = F, 
+          silent = T, cellwidth = 10, cellheight = 10)
 
 # plot cancer specific factors
 M <- LFs$maui_factors$pancancer.cnv_gex_meth_mut
 ct <- surv[match(rownames(M), bcr_patient_barcode)]$project
 
-p2 <- plot_tsne(M, ct, show.labels = T) + 
+p3 <- plot_tsne(M, ct, show.labels = T) + 
   theme(legend.position = 'none')
 
-p3 <- plot_label_specific_vars(M, ct)
+p4 <- plot_label_specific_vars(M, ct)
 
 # data type contribution to top LF per factor
-p4 <- plot_datatype_contribution_by_factor(LFs, FWs, 'maui_factors', 
+p5 <- plot_datatype_contribution_by_factor(LFs, FWs, 'maui_factors', 
                                            'pancancer', 'cnv_gex_meth_mut', factors = ct, 
                                            top_lfs = 1, top_features = 100) 
-p4 <- p4 + labs(y = 'Relative Contribution\nto top latent factor') + 
+p5 <- p5 + labs(y = 'Relative Contribution\nto top latent factor') + 
   theme(legend.position = 'top', legend.background = element_blank(), 
         legend.title = element_blank())
 
-Fig <- plot_grid(plot_grid(p1, p2, nrow = 1, labels = c('A', 'B'),
-                           rel_widths = c(1,2)), 
-                  plot_grid(p4, p3, nrow = 1, labels = c('C', 'D'), 
-                            rel_widths = c(1,2)), 
-                  nrow = 2,
-                  rel_heights = c(2,3))
 
-fig_count <- fig_count + 1
-Figures[[fig_count]] <- Fig
-fig.name <- paste0('Figure', fig_count, '.pancancer_cancer_type_prediction.pdf')
-names(Figures)[fig_count] <- fig.name
-ggsave(file.path(FigureFolder, fig.name),
-              plot = Fig, units = 'in', width = 12, height = 12)
-Legends[[fig_count]] <- "Predictive power of latent factors in distinguishing cancer types. A) comparing MAUI with PCA/MOFA/MCIA. Mean Balanced Accuracy computed on the test dataset (30% of held-out data) trained on 70% of the dataset using an Elastic Net multi-class model. B) tSNE plot of MAUI latent factors learned from pan-cancer dataset  C) Percentage of top feature types contributing to top predictive maui latent factor per cancer type. D) Top maui LFs detected per cancer type. Size/color/opacity of the points represent the average neural activation value of the LF for the corresponding cancer type samples."
-
-```
-
-
-```{r clustering_metrics, fig.width=10, fig.height=8}
+# 2. Cohort-based unsupservised clustering benchmark
 # clustering metrics of various cancers 
-# Use top 10 factors (derived from multi-omics) to cluster samples using cancer-specific LFs 
-
+# Use top most-variable factors (derived from multi-omics) to cluster samples using cancer-specific LFs 
 multi_omics_comb <- 'cnv_gex_meth_mut'
 experiments <- grep(paste0('^TCGA-.*.', multi_omics_comb), names(LFs$pca_factors), value = T)
 cl <- parallel::makeCluster(20)
@@ -149,24 +139,18 @@ cluster.stats <- do.call(rbind, sapply(simplify = F, names(LFs), function(tool) 
       # to avoid highly correlated maui LFs to dominate clusters
       M <- scale(t(remove_redundant_variables(t(M))))
     } 
-    # try topN from 5 to 25 (each tool may capture different amount of information 
-    # by varying number of factors)
-    stats <- do.call(rbind, lapply(seq(5, min(20, ncol(M)), 5), function(n) {
-      message(n)
-      M.sub <- t(subset_features_by_variance(t(M), topN = n))
-      val <- c('internal') 
-      if(ncol(M.sub) > 2) {val <- c('internal', 'stability')}
-      res <- clValid::clValid(obj = M.sub,
-                            nClust = 3:8,
-                            clMethods = 'kmeans',
-                            validation = val,
-                            maxitems = 10000,
-                            nstart = 1000, iter.max = 30)
-      stats <- data.table::as.data.table(res@measures)[V1 %in% c('Silhouette', 'APN')]
-      colnames(stats) <- c('metric', 'k', 'clustering_method', 'score')
-      stats$top_factors <- n
-      return(stats)
-    }))
+    # use top 5 most-variable factors for clustering
+    M.sub <- t(subset_features_by_variance(t(M), topN = 5))
+    val <- c('internal') 
+    if(ncol(M.sub) > 2) {val <- c('internal', 'stability')}
+    cl_res <- clValid::clValid(obj = M.sub,
+                          nClust = 3:8,
+                          clMethods = 'kmeans',
+                          validation = val,
+                          maxitems = 10000,
+                          nstart = 1000, iter.max = 30)
+    stats <- data.table::as.data.table(cl_res@measures)[V1 %in% c('Silhouette', 'APN')]
+    colnames(stats) <- c('metric', 'k', 'clustering_method', 'score')
     stats$cancer_type <- strsplit(experiment, "\\.")[[1]][1]
     stats$datatypes <- strsplit(experiment, "\\.")[[1]][2]
     return(stats)
@@ -183,7 +167,7 @@ dt1 <- cluster.stats[metric == 'Silhouette'][datatypes == multi_omics_comb,
 dt1$method <- toupper(gsub("_factors", "", dt1$method))
 comps <- lapply(setdiff(unique(dt1$method), 'MAUI'), function(x) c('MAUI', x))
 
-p1 <- ggboxplot(dt1, 
+p6 <- ggboxplot(dt1, 
           x = 'method', y = 'score', add = 'jitter', color = 'method') + 
   stat_compare_means(method = 'wilcox.test', paired = TRUE, 
                      comparisons = comps) + 
@@ -196,24 +180,42 @@ dt2 <- cluster.stats[metric == 'APN'][datatypes == multi_omics_comb,
                                              by = c('cancer_type', 'method', 'k')]
 dt2$method <- toupper(gsub("_factors", "", dt2$method))
 comps <- lapply(setdiff(unique(dt2$method), 'MAUI'), function(x) c('MAUI', x))
-p2 <- ggboxplot(dt2, 
+p7 <- ggboxplot(dt2, 
           x = 'method', y = 'score', add = 'jitter', color = 'method') + 
   stat_compare_means(method = 'wilcox.test', paired = TRUE,  
                      comparisons = comps) + 
   labs(title = 'Cluster Stability Score (APN)', x = '') + 
   theme(legend.position = 'none')
 
-Fig <- plot_grid(plot_grid(p1, p2, labels = c('A', 'B'), nrow = 1),
-                 p4, nrow = 2, labels = c('', 'C'))
+# combine plots for main figure 
+Fig <- plot_grid(plot_grid(p3, p5, nrow = 1, labels = c('A', 'B'),
+                           rel_widths = c(2,1)), 
+                  plot_grid(p6, p7, nrow = 1, labels = c('C', 'D')), 
+                  nrow = 2,
+                  rel_heights = c(2,1))
 
 fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
-fig.name <- paste0('Figure', fig_count, '.cohort_based_metrics.pdf')
+fig.name <- paste0('Figure', fig_count, '.benchmarks.pdf')
 names(Figures)[fig_count] <- fig.name
-ggsave(file.path(FigureFolder, fig.name),        
-       plot = Fig, units = 'in', 
-       width = 10, height = 10)
-Legends[[fig_count]] <- "Comparison of unsupervised clustering performances based on cluster homogeneity (Silhouette) in A) and cluster stability (Average Proportion of Non-Overlap (APN) in B). Each point represents a clustering score for 132 k-means clustering results (21 cancer types x for 6 different values of k from 3 to 8) for each tool. C-D) Survival outcome prediction accuracy for 21 cancer types by each tool's top 10 survival-related factors based on Overall Survival (in C) or Progression Free Survival endpoints. (in D)."
+ggsave(file.path(FigureFolder, fig.name),
+              plot = Fig, units = 'in', width = 12, height = 12)
+Legends[[fig_count]] <- " A) tSNE plot of MAUI latent factors learned from pan-cancer dataset  B) Percentage of top feature types contributing to top predictive maui latent factor per cancer type. C, D) Comparison of unsupervised clustering performances based on cluster homogeneity (Silhouette) in C and cluster stability (Average Proportion of Non-Overlap (APN) in D. Each point represents a clustering score for 132 k-means clustering results (21 cancer types x for 6 different values of k from 3 to 8) for each tool."
+
+# supplementary figure
+
+supFig <- cowplot::plot_grid(cowplot::plot_grid(p1, p2$gtable, nrow = 1, 
+                                                labels = c('A', 'B'), rel_widths = c(1.2, 2)), 
+                          p4, nrow = 2, labels = c('', 'C'), rel_heights = c(1.2, 2))
+# print p3 to supplements 
+supFig_count <- supFig_count + 1
+SuppFigures[[supFig_count]] <- supFig
+fig.name <- paste0('SuppFigure', supFig_count, '.benchmarks.supp.pdf')
+names(SuppFigures)[supFig_count] <- fig.name
+ggsave(file.path(FigureFolder, fig.name), 
+              plot = supFig, units = 'in', width = 8.27, height = 11.69)
+SuppLegends[[supFig_count]] <- "A) Predictive power of latent factors in distinguishing cancer types comparing MAUI with PCA/MOFA/MCIA. Mean Balanced Accuracy computed on the test dataset (30% of held-out data) trained on 70% of the dataset using an Elastic Net multi-class model. B) Confusion matrix of predicted versus true labels of samples' cancer types. The color of each cell represents the percentage of samples from the cancer type in the rows that are classified into the cancer types on the column. Cells that deviate from the red color represent relatively lower
+level of classification accuracy. C) Top maui LFs detected per cancer type. Size/color/opacity of the points represent the average neural activation value of the LF for the corresponding cancer type samples."
 ```
 
 
@@ -349,7 +351,7 @@ fig.name <- paste0('Figure', fig_count, '.surv.Cindex_improv.hazard_ratio.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, width = 8.27, height = 11.69, units = 'in')
-Legends[[fig_count]] <- "Using MAUI LFs for progression-free survival prediction. A) Harrell’s C-index computed using only clinical factors (tumor stage + age + gender) or using clinical factors along with survival-predictive MAUI LFs. B) Hazard ratios of top LFs picked for each cancer adjusted for clinical factors (tumor stage + age + gender). C) Kaplan-Meier survival curves adjusted for clinical factors (tumor stage + age + gender) stratified by the neural activation values of top survival-predictive LFs per cancer."
+Legends[[fig_count]] <- "A) Top significant (padj < 0.05) clinical factor-associated LFs per cancer type. B) Harrell’s C-index for progression-free survival prediction accuracy computed using only clinical factors (tumor stage + age + gender) or using clinical factors along with survival-predictive MAUI LFs."
 
 
 # combine adjusted survival curve plots into a single plot 
@@ -379,8 +381,7 @@ fig.name <- paste0('SuppFigure', supFig_count, '.adjusted_survival_curves.pdf')
 names(SuppFigures)[supFig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name), 
               plot = Fig, units = 'in', width = 8.27, height = 11.69)
-SuppLegends[[supFig_count]] <- "Survival curves adjusted for tumor stage + age + gender based on a cutpoint of 
-top survival-associated LF per cancer cohort."
+SuppLegends[[supFig_count]] <- "Kaplan-Meier survival curves adjusted for clinical factors (tumor stage + age + gender) stratified by the neural activation values of top survival-predictive LFs per cancer."
 ```
 
 
