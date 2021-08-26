@@ -1489,6 +1489,40 @@ score_gene_set <- function(rankData, genes_up, gene_down = NULL) {
   return(scores$TotalScore)
 }
 
+# find percent contribution of different datatypes to the top factor specific variables 
+# LFs: Latent factors; nested list
+# FWs: Feature weights for each LF; nested list 
+# tool: pca/maui/mofa
+# project: e.g. pancancer
+# datatype: e.g. cnv_gex_mut
+# factors: factor vector (e.g. cancer types for each sample or subtype info for each sample)
+# top_lfs: top LF to pick per factor
+# top_featuers: top features to pick per latent factor
+plot_datatype_contribution_by_factor <- function(LFs, FWs, tool, project, datatype, 
+                                                 factors, top_lfs = 1, top_features = 100) {
+  experiment <- paste0(project, '.', datatype)
+  L <- LFs[[tool]][[experiment]]
+  W <- FWs[[tool]][[experiment]]
+  dt <- get_factor_specific_variables(L, factors)
+  top_vars <- get_top_by_label(dt[padj < 0.05][order(padj)], 'ref_cl', topN = top_lfs)
+  # for each factor, pick top lfs and pick top features per lf and plot composition
+  freq <- do.call(rbind, lapply(split(top_vars, top_vars$ref_cl), function(x) {
+    l <- unique(x$variable) # one or more lfs 
+    # get top features per lf and concatenate
+    f <- do.call(c, lapply(l, function(y) {
+      head(sort(abs(W[,y]), decreasing = T), top_features)
+    }))
+    freq <- data.table(table(sub("^(.+?)\\..+$", "\\1", unique(names(f)))))
+    freq$factor <- unique(x$ref_cl)
+    colnames(freq)[1] <- 'omics'
+    return(freq)
+  }))
+  
+  ggplot(freq, aes(x = factor, y = N)) + 
+    geom_bar(stat = 'identity', aes(fill = omics), 
+             position = 'fill') + coord_flip() + 
+    labs(x = '', y = 'Percentage of top features contributing to top latent factors')
+}
 
 
 
