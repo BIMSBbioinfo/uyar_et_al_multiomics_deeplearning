@@ -62,30 +62,6 @@ FWs <- import_feature_weights(TOOLS, inputDir)
 
 
 ```{r}
-plot_comp1 <- function(dt) {
-  dt$method <- toupper(gsub("_factors", "", dt$method))
-  comps <- lapply(setdiff(unique(dt$method), 'MAUI'), function(x) c('MAUI', x))
-  ggboxplot(dt, 
-          x = 'method', y = 'test_auc', color = 'method', 
-          add = 'jitter', legend = 'none') + 
-    stat_compare_means(method = 'wilcox.test', paired = T, 
-                       method.args = list('alternative' = 'greater'), 
-                     comparisons = comps) +
-    labs(y = 'AUC') + theme(axis.text = element_text(size = 10))
-}
-
-plot_comp2 <- function(dt) {
-  dt$method <- toupper(gsub("_factors", "", dt$method))
-  dtc <- melt(dcast(dt, label ~ method, value.var = 'test_auc'), 
-              id.vars = c('label', 'MAUI'))
-  dtc$difference <- dtc$MAUI - dtc$value
-  ggplot(dtc, 
-         aes(x = MAUI, y = value)) + 
-    geom_point() + geom_abline(slope = 1) + 
-    facet_wrap(~ variable, nrow = 1) + 
-    labs(y = 'AUC')
-} 
-
 get_top_by_label <- function(dt, label.type, topN = 5) {
   do.call(rbind, lapply(split(dt, dt[,get(label.type)]), function(x) {head(x, topN)}))
 }
@@ -427,20 +403,19 @@ plots <- sapply(simplify = F, names(surv.stats), function(x) {
     }
 })
 plots <- plots[!sapply(plots, is.null)]
-p3 <- cowplot::plot_grid(plotlist = plots, nrow = 3, 
+Fig <- cowplot::plot_grid(plotlist = plots, nrow = 6, 
                    labels = sapply(strsplit(names(plots), '\\.'), function(x) x[1]), 
                    label_size = 8)
 
 # print p3 to supplements 
 supFig_count <- supFig_count + 1
-SuppFigures[[supFig_count]] <- p3
+SuppFigures[[supFig_count]] <- Fig
 fig.name <- paste0('SuppFigure', supFig_count, '.adjusted_survival_curves.pdf')
 names(SuppFigures)[supFig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name), 
               plot = Fig, units = 'in', width = 8.27, height = 11.69)
 SuppLegends[[supFig_count]] <- "Survival curves adjusted for tumor stage + age + gender based on a cutpoint of 
 top survival-associated LF per cancer cohort."
-
 ```
 
 
