@@ -29,6 +29,9 @@ library(pheatmap)
 library(survminer)
 library(survival)
 library(caret)
+library(treeheatr)
+library(partykit)
+
 theme_set(ggpubr::theme_pubclean())
 geneSetScoresFolder <- '/data/local/buyar/arcas/subtyping_paper/data/geneset_scores/singscore'
 
@@ -40,6 +43,7 @@ projectDict <- sapply(yaml::read_yaml(settings$projectDict),
 tcga_subtypes <- process_tcga_subtypes()
 
 ens2hgnc <- readRDS(settings$ens2hgnc)
+cpg2hgnc <- readRDS(settings$cpg2hgnc)
 
 TOOLS <- c('maui_factors', 'mofa_factors', 'mcia_factors', 'pca_factors')
 
@@ -65,14 +69,33 @@ FWs <- import_feature_weights(TOOLS, inputDir)
 get_top_by_label <- function(dt, label.type, topN = 5) {
   do.call(rbind, lapply(split(dt, dt[,get(label.type)]), function(x) {head(x, topN)}))
 }
+
+map_ids <- function(markers, cpg2hgnc, ens2hgnc) {
+  dt <- data.table::data.table('id' = gsub("^.+?\\.", "", markers), 
+                               'type' = sub("(^.+?)\\..+$", "\\1", markers), 
+                               'variable' = markers)
+  do.call(rbind, lapply(names(split(dt, dt$type)), function(x) {
+    message(x)
+    if(x == 'meth') {
+      dt.map <- cpg2hgnc[cpg_site %in% dt[type == x]$id]
+      colnames(dt.map) <- c('id', 'hgnc')
+      return(merge(dt[type == x], dt.map,  by = 'id'))
+    } else if (x == 'cnv') {
+      dt.map <- dt[type == x]
+      dt.map$hgnc <- gsub("^.+?\\.", "", dt.map$variable)
+      return(dt.map)
+    } else if (x == 'gex' || x == 'mut') {
+      dt.map <- ens2hgnc[ref_gene_id %in% dt[type == x]$id]
+      colnames(dt.map) <- c('id', 'hgnc')
+      return(merge(dt[type == x], dt.map,  by = 'id'))
+    }
+  }))
+}
 ```
 
 ```{r pancancer_prediction, fig.height=9, fig.width=12}
-
-
 # In this section, we make figures about pan-cancer classification 
 # and some benchmarks of cohort-based unsupervised clustering across cancers
-
 
 # 1. pancancer classification
 # Find out if cancer types are predictable using latent factors 
@@ -347,7 +370,7 @@ Fig <- cowplot::plot_grid(cowplot::plot_grid(p1, p2, nrow = 2, labels = c('A', '
 
 fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
-fig.name <- paste0('Figure', fig_count, '.surv.Cindex_improv.hazard_ratio.pdf')
+fig.name <- paste0('Figure', fig_count, '.clinical_factors.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, width = 8.27, height = 11.69, units = 'in')
@@ -491,12 +514,12 @@ Legends[[fig_count]] <- "Latent factors predictive of MSI status (high: MSI-H, s
 # Analysis of non-small-cell lung cancer types (LUSC vs LUAD)
 # reference study: https://www.nature.com/articles/s41598-020-77284-8
 M <- LFs$maui_factors$nsclc.cnv_gex_meth_mut
-M <- scale(M) #remove_redundant_variables(M, perc = 99)
-ct <- surv[match(rownames(M), bcr_patient_barcode)]$project
+M <- scale(M) 
+ct <- gsub("TCGA-", "", surv[match(rownames(M), bcr_patient_barcode)]$project)
 
 # find type-specific LFs
-dt <- get_factor_specific_variables(M, ct)
-top_vars <- get_top_by_label(dt[padj < 0.05][order(padj)], 'ref_cl', 1)
+subtype_lfs <- get_factor_specific_variables(M, ct)
+top_vars <- get_top_by_label(subtype_lfs[padj < 0.05][order(padj)], 'ref_cl', 1)
 
 # roc curves for predicting lung cancer types
 rocs <- predict_cluster_labels_glmnet(M, ct, returnROC = TRUE)
@@ -510,8 +533,8 @@ p1 <- p1 + geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), color="grey", lin
 df <- plot_tsne(M, ct, returnData = T)
 
 # top lf for LUSC
-top_lf_lusc <- top_vars[ref_cl == 'TCGA-LUSC']$variable
-top_lf_luad <- top_vars[ref_cl == 'TCGA-LUAD']$variable
+top_lf_lusc <- top_vars[ref_cl == 'LUSC']$variable
+top_lf_luad <- top_vars[ref_cl == 'LUAD']$variable
 df <- cbind(df, 
             M[,top_lf_lusc,drop = F],
             M[,top_lf_luad,drop = F])
@@ -527,29 +550,56 @@ p4 <- p + geom_point(aes_string(color = top_lf_luad)) +
   scale_color_gradient(low = 'gray', high = 'red') +
   geom_text_repel(data = get_centroid(df[,1:2], df$group), 
             aes(x,y,label = text.label), size = 5)
-p5 <- plot_datatype_contribution_by_factor(LFs, FWs, 'maui_factors', 'nsclc', 'cnv_gex_meth_mut', 
-                                     factors = ct, top_lfs = 1, top_features = 500) + 
-  labs(y = 'Relative Contribution\nto top latent factor')
 
-dt <- data.table(M[,top_vars[['variable']]], keep.rownames = T)
-dt <- dt[rowSums(dt[,2:3]) > 0] 
-dt$pr <- surv[match(dt$rn, bcr_patient_barcode)]$project
+# detect subtype specific features that contribute most 
+# to top LFs and make a decision tree plot  
+## get top 10 markers per top LFs per group
+top_vars <- get_top_by_label(subtype_lfs[padj < 0.05][order(padj)], 'ref_cl', 5)
+W <- FWs$maui_factors$nsclc.cnv_gex_meth_mut
+markers <- unlist(lapply(unique(top_vars$variable), function(x) {
+  # get top features per lf and concatenate
+  head(sort(abs(W[,x]), decreasing = T), 10)
+}))
 
-# alternatively, split samples by LF scores, plot gene set scores 
-scores <- import_geneset_scores(geneSetScoresFolder, annotation = 'cancersea')
-S <- data.table(scores[intersect(rownames(scores), rownames(M)),], keep.rownames = T)
+# import assay data and subset for markers 
+A <- data.table::fread(file.path(settings$assay_output$folder, 
+                                 'nsclc.cnv_gex_meth_mut.csv'))
+A.sub <- A[V1 %in% names(markers)]
+#convert to matrix
+A.subM <- as.matrix(data.frame(A.sub[,-1],
+                               row.names = A.sub$V1, 
+                               check.names = F))
+labels <- gsub("TCGA-", "", surv[match(colnames(A.subM), bcr_patient_barcode)]$project)
 
-dt <- merge(dt, S, by = 'rn')
+# further filter top features 
+top_features <- get_factor_specific_variables(t(A.subM), labels)
+# get top 5 per subtype
+top_markers <- get_top_by_label(top_features[padj < 0.05][order(padj)], 
+                                'ref_cl', topN = 5)
+# map ids 
+top_markers <- merge(top_markers, map_ids(top_markers$variable, cpg2hgnc, ens2hgnc), by = 'variable')
 
-mdt <- melt(dt, measure.vars = setdiff(colnames(S), 'rn'))
+# use treeheatr and partykit package to compute/visualize decision tree
+df <- data.frame(t(round(A.subM[top_markers$variable,], 3)))
+colnames(df) <- paste(top_markers$type, top_markers$hgnc, sep = ":")
+df$subtype <- as.factor(labels)
 
-p6 <- ggplot(mdt, aes(x = value, y = variable)) + 
-  ggridges::geom_density_ridges(aes(fill = get(top_lf_lusc) > get(top_lf_luad)), alpha = 0.7) +
-  labs(x = 'CancerSEA gene set scores', y = 'Cancer Cell States') + 
-  guides(fill=guide_legend(title=paste0(top_lf_lusc, " > ",top_lf_luad)))
+set.seed(123)
+inTrain <- caret::createDataPartition(df$subtype, p = 0.6)
+df.train <- df[inTrain[[1]],]
+df.test <- df[-inTrain[[1]],]
+p5 <- treeheatr::heat_tree(
+  x = partykit::ctree(subtype ~ ., data = df.train),
+  data_test = df.test,
+  heat_rel_height = 0.4
+)
 
-Fig <-  cowplot::plot_grid(p1, p2, p3, p4, p5, p6, 
-                         labels = 'AUTO', ncol = 2)
+# compute classification accuracy of using top 10 markers in a random forest model
+rf_stats <- predict_cluster_labels(t(A.subM[top_markers$variable,]), labels, partition = 0.6)
+
+Fig <-  cowplot::plot_grid(cowplot::plot_grid(p1, p2, p3, p4,
+                         labels = 'AUTO', nrow = 2), 
+                         p5, nrow = 2, labels = c('', 'E'))
 
 fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
@@ -557,11 +607,12 @@ fig.name <- paste0('Figure', fig_count, '.luad_vs_lusc.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        Fig, units = 'in', 
-       width = 10, height = 12)
+       width = 8.27, height = 11.69)
+
 Legends[[fig_count]] <- "Classification of Non-Small-Cell Lung Adenocarcinoma samples using MAUI latent factors.
 A) ROC curves with AUC values on testing data (40% of the dataset) using an Elastic Net model with 5-fold cross-validation. B) t-SNE plot of MAUI LFs colored by cancer types. C) t-SNE plot of MAUI LFs colored by 
 the top most-predictive latent factor for TCGA-LUSC samples. D) t-SNE plot of MAUI LFs colored by the top 
-most predictive latent factor for TCGA-LUAD samples. E) Percentage of top 500 contributing features each of the top most predictive latent factors broken down into categories by cancer type and data type. F) Cancer Cell State score distribution of samples grouped by whether the sample has a higher score for LUSC-predictive latent factor than the LUAD-predictive latent factor."
+most predictive latent factor for TCGA-LUAD samples. E) Decision tree visualisation of top LF-associated omics markers detected that can be used to distinguish LUSC and LUAD subtypes."
 ```
 
 ```{r}
