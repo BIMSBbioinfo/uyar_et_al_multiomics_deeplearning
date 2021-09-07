@@ -1,5 +1,8 @@
 Run pan-cancer, pan-organ experiments and compare with other tools
 
+0. Activate environment
+conda activate maui
+
 1. Set up the experiments
 
 Configure the experiment using the settings.yaml # set up a folder under results folder 
@@ -18,7 +21,8 @@ bash ./src/compile_figures.sh /opt/R-4.0.2/lib64/R/bin/Rscript `pwd`/src/manuscr
 
 
 manuscript figures:
-nohup bash ./src/compile_figures.sh /opt/R/4.0/bin/Rscript ./src/manuscript_figures.Rmd `pwd`/results/hallmarks_many_LFs/settings.yaml /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas/ /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas > figures.log
+# for  testing
+nohup bash ./src/compile_figures.sh /opt/R/4.0/bin/Rscript ./src/manuscript_figures.Rmd `pwd`/results/hallmarks_many_LFs/settings.yaml /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas/test /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas/test > figures.log
 
-
-
+# for releasing
+nohup bash ./src/compile_figures.sh /opt/R/4.0/bin/Rscript ./src/manuscript_figures.Rmd `pwd`/results/hallmarks_many_LFs/settings.yaml /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas > figures.log
