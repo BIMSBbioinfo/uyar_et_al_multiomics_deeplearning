@@ -803,6 +803,53 @@ Cancers (N=348) using MAUI. A) Comparison of top latent factors predictive of co
 ```
 
 
+```{r tmz_gbm}
+# TMZ resistance in GBM anaysis by Jona.
+# Here I import figure data to have consistent figure styles
+folder <- '/data/local/buyar/arcas/pancancer_multiomics_manuscript/results/tmz_gbm_jona'
+
+# cross-validation results predicting TMZ resistance using 
+# maui LFs and other known markers 
+aucs <- data.table::fread(file.path(folder, 'aucs.csv'))
+aucs$group <- ifelse(grepl('LF', aucs$method), 'maui', 'no-maui')
+aucs$method <- gsub("LF[Ss]", "MAUI LFs", aucs$method)
+colnames(aucs)[2] <- c('AUC')
+Fig <- ggpubr::ggbarplot(aucs, x = 'method', y = 'AUC', add = 'mean_se',
+                  fill = 'group') +
+  theme(axis.title.x = element_blank(), legend.position = 'none', 
+        ) + 
+  scale_fill_brewer(type = 'qual', palette = 3)
+
+fig_count <- fig_count + 1
+Figures[[fig_count]] <- Fig
+fig.name <- paste0('Figure', fig_count, '.tmz_gbm.pdf')
+names(Figures)[fig_count] <- fig.name
+ggsave(file.path(FigureFolder, fig.name),
+              plot = Fig, units = 'in', width = 10, height = 6)
+Legends[[fig_count]] <- "Classification accuracy quantified as the Area under the ROC (AUC) when predicting TMZ resistance in GBM patients using MAUI LFs alone or in combination with the MGMT expression or promoter methylation values."
+
+# supplementary figure
+topGenes <- data.table::fread(file.path(folder, 'top100_genes.csv'))
+colnames(topGenes)[4] <- 'literature'
+topGenes$label <- 'Other'
+topGenes[MMR == TRUE]$label <- 'MMR Pathway'
+topGenes[literature == TRUE]$label <- 'Literature Support'
+
+supFig <- ggpubr::ggbarplot(topGenes, x = 'V1', y = 'Gene score', 
+                  fill = 'label') +
+  theme(axis.title.y = element_blank(), legend.title = element_blank(),
+        axis.text.y = element_text(size = 8)) +
+  coord_flip()
+
+supFig_count <- supFig_count + 1
+SuppFigures[[supFig_count]] <- supFig
+fig.name <- paste0('SuppFigure', supFig_count, '.tmz_gbm.supp.pdf')
+names(SuppFigures)[supFig_count] <- fig.name
+ggsave(file.path(FigureFolder, fig.name), 
+              plot = supFig, units = 'in', width = 8.27, height = 11.69)
+SuppLegends[[supFig_count]] <- "Top 100 genes sorted by importance in predicting TMZ resistance in GBM patients."
+```
+
 ```{r print_figures, results='asis', include=TRUE, fig.width=10, fig.height=11}
 base_url <- 'https://bimsbstatic.mdc-berlin.de'
 for(i in 1:length(Figures)) {

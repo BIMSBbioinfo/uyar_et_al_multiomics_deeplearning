@@ -1,5 +1,5 @@
 library(reticulate)
-# run this in interactive mode, turn it off for command-line (I know it is stupid)
+# run this in interactive mode, turn it off for command-line
 # use_python('/home/buyar/.cache/basilisk/1.2.0/MOFA2-1.0.0/mofa_env/bin/python3.7', required = TRUE)
 args <- commandArgs(trailingOnly = TRUE)
 s <- import("sys")
