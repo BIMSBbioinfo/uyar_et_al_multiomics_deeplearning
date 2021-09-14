@@ -94,6 +94,7 @@ map_ids <- function(markers, cpg2hgnc, ens2hgnc) {
 }
 ```
 
+
 ```{r pancancer_prediction}
 # In this section, we make figures about pan-cancer classification 
 # and some benchmarks of cohort-based unsupervised clustering across cancers
@@ -240,6 +241,7 @@ ggsave(file.path(FigureFolder, fig.name),
               plot = supFig, units = 'in', width = 8.27, height = 11.69)
 SuppLegends[[supFig_count]] <- "A) Predictive power of latent factors in distinguishing cancer types comparing MAUI with PCA/MOFA/MCIA. Mean Balanced Accuracy computed on the test dataset (30% of held-out data) trained on 70% of the dataset using an Elastic Net multi-class model. B) Confusion matrix of predicted versus true labels of samples' cancer types. The color of each cell represents the percentage of samples from the cancer type in the rows that are classified into the cancer types on the column. Cells that deviate from the red color represent relatively lower
 level of classification accuracy. C) Top maui LFs detected per cancer type. Size/color/opacity of the points represent the average neural activation value of the LF for the corresponding cancer type samples."
+
 ```
 
 
@@ -781,7 +783,6 @@ A) Heatmap of patient cluster memberships based on different objectives: optimum
 # immunotherapy response prediction analysis: 
 # TODO: pass paths via args
 settings_imtrp <- yaml::read_yaml('/data/local/buyar/arcas/pancancer_multiomics_manuscript/results/immunotherapy_response/Mariathasan_et_al/settings.yaml')
-pathways <- readRDS('/data/local/buyar/arcas/subtyping_paper/data/GeneSets/msigdb.pathways.RDS')  
 
 LFs_imtrp <- import_LFs(c('maui_factors', 'mofa_factors', 'pca_factors'), settings_imtrp$pipeline_output)
 FWs_imtrp <- import_feature_weights(c('maui_factors'), settings_imtrp$pipeline_output)
@@ -792,12 +793,10 @@ dt <- do.call(rbind, lapply(names(LFs_imtrp), function(tool) {
   M <- LFs_imtrp[[tool]]$mariathasan.gex
   # find LFs predictive of response to therapy 
   dt <- get_factor_specific_variables(M, colData$binaryResponse)[order(padj)]
-  #dt <- compute_anova(M, colData$binaryResponse)
   dt$tool <- tool
   return(dt)
 }))
 
-dt[,.SD[which.min(padj)],by = c('tool', 'ref_cl')]
 dt$tool <- toupper(gsub("_factors", "", dt$tool))
 dt$ref_cl <- ifelse(dt$ref_cl == 'CR/PR', 'Responders', 'Non-responders')
 
@@ -831,19 +830,6 @@ p3 <- plot_survival(surv = colData,
                                               row.names = rownames(m)), 
                     duration_col = 'os', event_col = 'censOS') 
 
-# top go terms for top features of top LF 
-W <- FWs_imtrp$maui_factors$mariathasan.gex
-feats <- data.table(W[,top_lf,drop=F], keep.rownames = T)[order(abs(get(top_lf)), decreasing = T)][1:100]
-# top pathways for top lf
-top_terms <- compute_geneset_enrichment(feats$rn, pathways)[order(pval)][padj < 0.05][1:5]
-top_terms$term_wr <- stringr::str_wrap(gsub("_", " ", top_terms$term), width = 24)
-p4 <- ggplot(top_terms, aes(x = reorder(term_wr, -pval), y = -log10(padj))) + 
-  geom_bar(stat = 'identity') + 
-  coord_flip() + labs(x = '') 
-colnames(feats)[2] <- 'top_lf'
-p5 <- ggplot(feats[1:10,], aes(x = reorder(rn, abs(top_lf)), y = abs(top_lf))) + 
-  geom_bar(stat = 'identity') + coord_flip() + labs(x = '', y = 'Feature Importance (absolute)')
-
 # correlation of top LF with tumor mutation burden
 # get samples with both response and tmb annotation
 dt <- do.call(rbind, lapply(names(LFs_imtrp), function(tool) {
@@ -855,7 +841,7 @@ dt <- do.call(rbind, lapply(names(LFs_imtrp), function(tool) {
 }))
 dt <- dt[,.SD[which.max(abs(V1))], by = c('tool')]
 dt$tool <- toupper(gsub("_factors", "", dt$tool))
-p6 <- ggplot(dt, aes(x = tool, y = abs(V1))) + 
+p4 <- ggplot(dt, aes(x = tool, y = abs(V1))) + 
   geom_bar(stat = 'identity', aes(fill = tool), position = 'dodge') +
   coord_flip() + 
   labs(y = 'Correlation with Tumor Mutation Burden') + 
@@ -872,7 +858,7 @@ dt <- do.call(rbind, lapply(names(LFs_imtrp), function(tool) {
 
 dt[,.SD[which.min(padj)],by = c('ref_cl', 'tool')]
 dt$tool <- toupper(gsub("_factors", "", dt$tool))
-p7 <- ggplot(dt[,.SD[which.min(padj)],by = c('ref_cl', 'tool')], 
+p5 <- ggplot(dt[,.SD[which.min(padj)],by = c('ref_cl', 'tool')], 
              aes(x = ref_cl, y = -log10(padj))) + 
   geom_bar(stat = 'identity', aes(fill = tool), position = 'dodge') +
   geom_hline(yintercept = -log10(0.05)) + 
@@ -882,8 +868,8 @@ p7 <- ggplot(dt[,.SD[which.min(padj)],by = c('ref_cl', 'tool')],
         plot.title = element_text(hjust = 0.5)) 
 
 Fig <- cowplot::plot_grid(
-  cowplot::plot_grid(p1, p6, p7, nrow = 1, labels = 'AUTO'),
-  cowplot::plot_grid(p2$gtable, p3$plot, p4, p5, nrow = 2, labels = c('D', 'E', 'F', 'G')),
+  cowplot::plot_grid(p1, p4, p5, nrow = 1, labels = 'AUTO'),
+  cowplot::plot_grid(p2$gtable, p3$plot, nrow = 1, labels = c('D', 'E')),
   nrow = 2, 
   rel_heights = c(1,2)
   ) 
@@ -895,7 +881,7 @@ ggsave(filename = file.path(FigureFolder, fig.name),
        plot = Fig, units = 'in', 
        width = 12, height = 14)
 Legends[[fig_count]] <- "Predicting responders to anti-PD-L1 treatment in a cohort of Metastatic Urothelial
-Cancers (N=348) using MAUI. A) Comparison of top latent factors predictive of complete/partial response (CR/PR) to the anti-PD-L1. B) Comparison of top latent factors with respect to their correlation with tumor mutation burden status of the samples in the cohort C) Comparison of top latent factors predictive of immune phenotypes (inflamed/excluded/desert). D) Top MAUI LFs predictive of response to anti-PD-L1 response groups. E) Survival stratification of the cohort based activation score of LF44 (high = LF44 > 1.4, low = LF44 < 1.4). F) Top pathways enriched among top 100 genes that contribute to the top latent factor (LF44). G) Top 10 genes contributing to LF44"
+Cancers (N=348) using MAUI. A) Comparison of top latent factors predictive of complete/partial response (CR/PR) to the anti-PD-L1. B) Comparison of top latent factors with respect to their correlation with tumor mutation burden status of the samples in the cohort C) Comparison of top latent factors predictive of immune phenotypes (inflamed/excluded/desert). D) Top MAUI LFs predictive of response to anti-PD-L1 response groups. E) Survival stratification of the cohort based activation score of LF44 (high = LF44 > 1.4, low = LF44 < 1.4)."
 ```
 
 
