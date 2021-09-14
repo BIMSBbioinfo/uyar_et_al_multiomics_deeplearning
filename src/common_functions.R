@@ -348,14 +348,24 @@ predict_numerical <- function(M, y, ...) {
   
 }
 
+evaluate_regression_model <- function(y, y_hat) {
+  # Model performance metrics
+  data.table::data.table(
+    RMSE = RMSE(y_hat, y),
+    Rsquare = R2(y_hat, y),
+    COR = cor(y_hat, y)
+  )
+}
+  
+  
 # elastic net model (cross-validate using 10 )
-predict_numerical_glmnet <- function(M, y) {
+predict_numerical_glmnet <- function(M, y, partition = 0.6) {
   require(glmnet)
   require(caret)
   df <- data.frame(M)
   df$y <- y
   df <- df[!is.na(df$y),]
-  intrain <- caret::createDataPartition(y = df$y, p= 0.6, list = FALSE)
+  intrain <- caret::createDataPartition(y = df$y, p = partition, list = FALSE)
   training <- df[intrain,]
   testing <- df[-intrain,]
   # Build the model using the training set
@@ -367,14 +377,9 @@ predict_numerical_glmnet <- function(M, y) {
   )
   # Best tuning parameter
   model$bestTune
-  x.test <- model.matrix(y ~., testing)[,-1]
-  predictions <- predict(model, x.test)
-  # Model performance metrics
-  data.frame(
-    RMSE = RMSE(predictions, testing$y),
-    Rsquare = R2(predictions, testing$y),
-    COR = cor(predictions, testing$y)
-  )
+  preds_test <- predict(model, model.matrix(y ~., testing)[,-1])
+  return(list('model' = model, 'preds' = data.frame('y' = testing$y, 
+                                                'y_hat' = preds_test)))
 }
 
 
@@ -1095,6 +1100,18 @@ process_clinical_covariates <- function(patientIDs) {
   return(clinicalData)
 }
 
+
+get_tumor_purity_estimates <- function(patientIDs) {
+  dt <- data.table::data.table(TCGAbiolinks::Tumor.purity)
+  dt <- data.table('Sample.ID' = dt$Sample.ID, 
+             'ESTIMATE' = as.numeric(gsub(",", ".", dt$ESTIMATE)), 
+             'ABSOLUTE' = as.numeric(gsub(",", ".", dt$ABSOLUTE)), 
+             'LUMP' = as.numeric(gsub(",", ".", dt$LUMP)), 
+             'IHC' = as.numeric(gsub(",", ".", dt$IHC)), 
+             'CPE' = as.numeric(gsub(",", ".", dt$CPE)), 
+             'bcr_patient_barcode' = sub("^(TCGA.{8}).+?$", "\\1", dt$Sample.ID))
+  return(dt[bcr_patient_barcode %in% patientIDs])
+}
 
 # build a cox model for each variable along correcting for existing clinical variables
 # return list of covariates that are significant 
