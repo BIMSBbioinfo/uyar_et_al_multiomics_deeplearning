@@ -409,7 +409,98 @@ SuppLegends[[supFig_count]] <- "Kaplan-Meier survival curves adjusted for clinic
 ```
 
 ```{r tumor_purity} 
+experiments <- grep('TCGA.*cnv_gex_meth_mut', names(LFs$maui_factors), value = T)
+# use maui LFs to predict TCGA IHC/CPE values that represent tumor purity levels 
+cl <- parallel::makeCluster(20)
+parallel::clusterExport(cl, varlist = c('LFs', 'experiments', 'settings'))
+results <- pbapply::pbsapply(cl = cl, simplify = F, experiments, function(experiment) {
+    message(experiment)
+    source(settings$utility_script)
+    library(data.table)
+    M <- LFs$maui_factors[[experiment]]
+    tp <- get_tumor_purity_estimates(rownames(M))
+    if(nrow(tp) < 50) {
+      warning("Couldn't find at least 100 samples with tumor purity 
+              scores in experiment ", experiment, " => ", nrow(tp))
+      return(NULL)
+    }
+    # predict IHC
+    y1 <- tp[,mean(IHC), by = bcr_patient_barcode][match(rownames(M), bcr_patient_barcode)]$V1
+    res1 <- predict_numerical_glmnet(M, y1)
+    # predict CPE (consensus estimates)
+    y2 <- tp[,mean(CPE), by = bcr_patient_barcode][match(rownames(M), bcr_patient_barcode)]$V1
+    res2 <- predict_numerical_glmnet(M, y2)
+    return(list('IHC' = res1, 'CPE' = res2))
+})
+parallel::stopCluster(cl)
 
+# summarize stats 
+stats <- do.call(rbind, lapply(names(results), function(x) {
+  message(x)
+  if(is.null(results[[x]])) {
+    return(NULL)
+  }
+  dt <- do.call(rbind, lapply(names(results[[x]]), function(y) {
+    message(y)
+    dt <- evaluate_regression_model(results[[x]][[y]][['preds']]$y, 
+                              results[[x]][[y]][['preds']]$y_hat)
+    dt$purity_method <- y
+    return(dt)
+  }))
+  dt$experiment <- x
+  return(dt)
+}))
+
+stats$project <- unlist(lapply(strsplit(stats$experiment, "\\."), function(x) x[[1]]))
+
+# plot correlation scores for all cohorts 
+p1 <- ggplot(stats[purity_method == 'IHC'][grep('TCGA', project)], 
+       aes(x = reorder(project, COR), y = COR, fill = COR),) + 
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  theme(axis.title.y = element_blank(), legend.position = 'none') + 
+  labs(y = "MAUI vs IHC") + ylim(0, 1)
+
+p2 <- ggplot(stats[purity_method == 'CPE'][grep('TCGA', project)], 
+       aes(x = reorder(project, COR), y = COR, fill = COR)) + 
+  geom_bar(stat = 'identity') +
+  coord_flip() +
+  theme(axis.title.y = element_blank(),  legend.position = 'none') + 
+  labs(y = "MAUI vs CPE") + ylim(0, 1)
+
+# correlation plots for top cancer types
+selected <- stats[purity_method == 'IHC'][grep('TCGA', experiment)][order(COR, decreasing = T)][1:4]$experiment
+plots <- lapply(selected, function(x) {
+  message(x)
+  p <- cowplot::plot_grid(plotlist = lapply(names(results[[x]]), function(y) {
+    message(y)
+    ggpubr::ggscatter(results[[x]][[y]][['preds']], 
+                           x = 'y_hat', y = 'y', 
+                           add = 'reg.line', cor.coef = T, cor.method = 'pearson') + 
+      labs(x = paste('MAUI prediction of', y), y = y, title = gsub("\\..+$", "", x))
+  }))
+  return(p)
+})
+
+p3 <- cowplot::plot_grid(plotlist = plots, ncol = 1)
+
+# supplementary figure
+supFig <- cowplot::plot_grid(cowplot::plot_grid(p1, p2, labels = c('A', 'B')), 
+                             p3, nrow = 2, labels = c('', 'C'), 
+                             rel_heights = c(2, 5))
+
+# print p3 to supplements 
+supFig_count <- supFig_count + 1
+SuppFigures[[supFig_count]] <- supFig
+fig.name <- paste0('SuppFigure', supFig_count, '.tumor_purity.supp.pdf')
+names(SuppFigures)[supFig_count] <- fig.name
+ggsave(file.path(FigureFolder, fig.name), 
+              plot = supFig, units = 'in', width = 8.27, height = 11.69)
+SuppLegends[[supFig_count]] <- "Predicting tumor purity estimates using MAUI latent factors. 
+A) Correlation of the MAUI predictions of IHC versus the annotated IHC values (immunohistochemistry-based tumor purity estimation). 
+B) Correlation of the MAUI predictions of CPE versus the annotated CPE levels (CPE stands for consensus purity estimated by computational methods: ABSOLUTE, ESTIMATE, and LUMP). 
+C) Scatterplots of MAUI predictions versus the annotated IHC and CPE values for the 
+top best predicted cancer types."
 ```
 
 
