@@ -10,7 +10,8 @@ params:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = FALSE, 
+                      fig.width = 8.27, fig.height = 11.69)
 knitr::opts_knit$set(root.dir = params$workdir)
 settings <- yaml::read_yaml(params$settings_file)
 message(settings$GDCdataDir)
@@ -93,7 +94,7 @@ map_ids <- function(markers, cpg2hgnc, ens2hgnc) {
 }
 ```
 
-```{r pancancer_prediction, fig.height=9, fig.width=12}
+```{r pancancer_prediction}
 # In this section, we make figures about pan-cancer classification 
 # and some benchmarks of cohort-based unsupervised clustering across cancers
 
@@ -242,7 +243,7 @@ level of classification accuracy. C) Top maui LFs detected per cancer type. Size
 ```
 
 
-```{r clinical_survival_factors, fig.width=12, fig.height=8}
+```{r clinical_survival_factors}
 # here we compute LFs associated to clinical factors (e.g. tumor stage, gender etc) and 
 # survival outcomes (PFI)
 
@@ -407,8 +408,12 @@ ggsave(file.path(FigureFolder, fig.name),
 SuppLegends[[supFig_count]] <- "Kaplan-Meier survival curves adjusted for clinical factors (tumor stage + age + gender) stratified by the neural activation values of top survival-predictive LFs per cancer."
 ```
 
+```{r tumor_purity} 
 
-```{r msi_stats, fig.width=10, fig.height=8}
+```
+
+
+```{r msi_stats}
 # Predicting MSI status using latent factors
 # predict MSI status for pan-gastrointestinal tumors
 # read MSI data
@@ -850,7 +855,7 @@ ggsave(file.path(FigureFolder, fig.name),
 SuppLegends[[supFig_count]] <- "Top 100 genes sorted by importance in predicting TMZ resistance in GBM patients."
 ```
 
-```{r print_figures, results='asis', include=TRUE, fig.width=10, fig.height=11}
+```{r print_figures, results='asis', include=TRUE}
 base_url <- 'https://bimsbstatic.mdc-berlin.de'
 for(i in 1:length(Figures)) {
   fig.url <- gsub("/data/bimsbstatic/public", base_url, file.path(FigureFolder, names(Figures)[i]))
