@@ -1,4 +1,4 @@
-source activate maui
+conda activate maui
 export PYTHONPATH=/home/buyar/.conda/envs/maui/lib/python3.6/site-packages
 assays=$1 # assay matrix file path
 outFile=$2 # path to output file
