@@ -719,72 +719,6 @@ the top most-predictive latent factor for TCGA-LUSC samples. D) t-SNE plot of MA
 most predictive latent factor for TCGA-LUAD samples. E) Decision tree visualisation of top LF-associated omics markers detected that can be used to distinguish LUSC and LUAD subtypes."
 ```
 
-```{r}
-# Show subtypes depend on the objective (dependent variable) - they are dynamic, not universal or carved in stone 
-# for a given cancer. There is not just one set of subtypes for a given cancer. Subtypes need to be phrased 
-# along with the dependent variable used to come up with the subtypes. 
-# Patients clustering depend on the objective of stratification
-clin_factors <- c('age_at_initial_pathologic_diagnosis', 'gender', 'ajcc_pathologic_tumor_stage')
-project <- 'pan-gastrointestinal'
-datatype <- 'cnv_gex_meth_mut'
-experiment <- paste0(project, '.', datatype)
-
-M <- LFs$maui_factors[[experiment]]
-clin <- process_clinical_covariates(rownames(M))
-clin <- subset(clin, select = intersect(colnames(clin), clin_factors))
-
-pfi_vars <- get_prognostic_covariates(surv, clin, M, event_col = 'PFI', duration_col = 'PFI.time')
-pfi_clust <- get_kmeans_subtypes(M[,unique(pfi_vars$variable)], k_vals = 3:8, min_cluster_size = 0)
-pfi_k <- names(which.min(sapply(colnames(pfi_clust), function(x) plot_survival(surv, pfi_clust[,x,drop = F], 'PFI.time', 'PFI', T))))
-
-os_vars <- get_prognostic_covariates(surv, clin, M, event_col = 'OS', duration_col = 'OS.time')
-os_clust <- get_kmeans_subtypes(M[,unique(os_vars$variable)], k_vals = 3:8, min_cluster_size = 0)
-os_k <- names(which.min(sapply(colnames(os_clust), function(x) plot_survival(surv, os_clust[,x,drop = F], 
-                                                                             'OS.time', 'OS', T))))
-
-# combine with known pan-gi subtype annotation
-df <- merge(pfi_clust[,pfi_k,drop = F], os_clust[,os_k,drop = F], by = 'row.names')
-df$subtype <- tcga_subtypes[match(df$Row.names, bcr_patient_barcode)]$Subtype_Selected
-df[is.na(df$subtype),]$subtype <- 'Unavailable'
-df$msi <- MSI[match(df$Row.names, bcr_patient_barcode)]$MSI
-df[is.na(df$msi),]$msi <- 'Unavailable'
-rownames(df) <- df$Row.names
-df$Row.names <- NULL
-colnames(df) <- c('Overall Survival', 'Progression Free Survival', 'Molecular Subtype', 'MSI Status')
-df <- data.frame(apply(df, 2, as.factor), check.names = F)
-df <- df[order(df[,1]),]
-m <- apply(df, 2, function(x) as.numeric(as.factor(x)))
-rownames(m) <- rownames(df)
-
-colors <- structure(1:7, names = c("1", "2", "3", "4", "5", "6", "7"))
-p1 <- Heatmap(t(m), name = "cluster", col = colors, cluster_rows = F, cluster_columns = F,
-              show_column_names = F, row_names_side = 'left',
-              column_title = 'Pan-gastrointestinal Cancer Samples\n(ordered by Overall Survival Clusters)')
-p1 <- grid::grid.grabExpr(ComplexHeatmap::draw(p1))
-# compute pairwise AMI 
-ami <- sapply(colnames(df), function(x) {
-  sapply(colnames(df), function(y) {
-    df <- df[!is.na(df[,x]) & !is.na(df[,y]),]
-    aricode::AMI(df[,x], df[,y])
-  })
-})
-
-p2 <- ggcorrplot::ggcorrplot(ami, legend.title = 'AMI', lab = T, type = 'lower', outline.color = 'white') +
-  scale_fill_gradient(limits = c(0,1), low = 'white', high = 'red') + 
-  guides(fill=guide_legend(title='AMI'))
-
-Fig <- cowplot::plot_grid(p1, p2, labels = 'AUTO', nrow = 2)
-supFig_count <- supFig_count + 1
-SuppFigures[[supFig_count]] <- Fig
-fig.name <- paste0('SuppFigure', supFig_count, '.subtype_dependency.pdf')
-names(SuppFigures)[supFig_count] <- fig.name
-ggsave(file.path(FigureFolder, fig.name), 
-              plot = Fig, units = 'in', width = 18, height = 12)
-SuppLegends[[supFig_count]] <- "Demonstration of how cancer subtypes are context/objective dependent.
-A) Heatmap of patient cluster memberships based on different objectives: optimum stratification based on overall survival or progression free survival, molecular homogeneity (TCGA pan-GI subtypes), or micro-satellite instability (MSI) status. Columns are ordered first by membership in the optimum Overall Survival cluster membership. B) Pairwise Adjusted Mutual Information (AMI) of cluster labels obtained via different patient stratification methods. The AMI value ranges from 0 to 1 and the higher the value, the more overlap between patient partitions."
-```
-
-
 ```{r immunotherapy_response}
 # immunotherapy response prediction analysis: 
 # TODO: pass paths via args
@@ -1002,6 +936,72 @@ ggsave(file.path(FigureFolder, fig.name),
               plot = supFig, units = 'in', width = 8.27, height = 11.69)
 SuppLegends[[supFig_count]] <- "Top 100 genes sorted by importance in predicting TMZ resistance in GBM patients."
 ```
+
+```{r}
+# Show subtypes depend on the objective (dependent variable) - they are dynamic, not universal or carved in stone 
+# for a given cancer. There is not just one set of subtypes for a given cancer. Subtypes need to be phrased 
+# along with the dependent variable used to come up with the subtypes. 
+# Patients clustering depend on the objective of stratification
+clin_factors <- c('age_at_initial_pathologic_diagnosis', 'gender', 'ajcc_pathologic_tumor_stage')
+project <- 'pan-gastrointestinal'
+datatype <- 'cnv_gex_meth_mut'
+experiment <- paste0(project, '.', datatype)
+
+M <- LFs$maui_factors[[experiment]]
+clin <- process_clinical_covariates(rownames(M))
+clin <- subset(clin, select = intersect(colnames(clin), clin_factors))
+
+pfi_vars <- get_prognostic_covariates(surv, clin, M, event_col = 'PFI', duration_col = 'PFI.time')
+pfi_clust <- get_kmeans_subtypes(M[,unique(pfi_vars$variable)], k_vals = 3:8, min_cluster_size = 0)
+pfi_k <- names(which.min(sapply(colnames(pfi_clust), function(x) plot_survival(surv, pfi_clust[,x,drop = F], 'PFI.time', 'PFI', T))))
+
+os_vars <- get_prognostic_covariates(surv, clin, M, event_col = 'OS', duration_col = 'OS.time')
+os_clust <- get_kmeans_subtypes(M[,unique(os_vars$variable)], k_vals = 3:8, min_cluster_size = 0)
+os_k <- names(which.min(sapply(colnames(os_clust), function(x) plot_survival(surv, os_clust[,x,drop = F], 
+                                                                             'OS.time', 'OS', T))))
+
+# combine with known pan-gi subtype annotation
+df <- merge(pfi_clust[,pfi_k,drop = F], os_clust[,os_k,drop = F], by = 'row.names')
+df$subtype <- tcga_subtypes[match(df$Row.names, bcr_patient_barcode)]$Subtype_Selected
+df[is.na(df$subtype),]$subtype <- 'Unavailable'
+df$msi <- MSI[match(df$Row.names, bcr_patient_barcode)]$MSI
+df[is.na(df$msi),]$msi <- 'Unavailable'
+rownames(df) <- df$Row.names
+df$Row.names <- NULL
+colnames(df) <- c('Overall Survival', 'Progression Free Survival', 'Molecular Subtype', 'MSI Status')
+df <- data.frame(apply(df, 2, as.factor), check.names = F)
+df <- df[order(df[,1]),]
+m <- apply(df, 2, function(x) as.numeric(as.factor(x)))
+rownames(m) <- rownames(df)
+
+colors <- structure(1:7, names = c("1", "2", "3", "4", "5", "6", "7"))
+p1 <- Heatmap(t(m), name = "cluster", col = colors, cluster_rows = F, cluster_columns = F,
+              show_column_names = F, row_names_side = 'left',
+              column_title = 'Pan-gastrointestinal Cancer Samples\n(ordered by Overall Survival Clusters)')
+p1 <- grid::grid.grabExpr(ComplexHeatmap::draw(p1))
+# compute pairwise AMI 
+ami <- sapply(colnames(df), function(x) {
+  sapply(colnames(df), function(y) {
+    df <- df[!is.na(df[,x]) & !is.na(df[,y]),]
+    aricode::AMI(df[,x], df[,y])
+  })
+})
+
+p2 <- ggcorrplot::ggcorrplot(ami, legend.title = 'AMI', lab = T, type = 'lower', outline.color = 'white') +
+  scale_fill_gradient(limits = c(0,1), low = 'white', high = 'red') + 
+  guides(fill=guide_legend(title='AMI'))
+
+Fig <- cowplot::plot_grid(p1, p2, labels = 'AUTO', nrow = 2)
+supFig_count <- supFig_count + 1
+SuppFigures[[supFig_count]] <- Fig
+fig.name <- paste0('SuppFigure', supFig_count, '.subtype_dependency.pdf')
+names(SuppFigures)[supFig_count] <- fig.name
+ggsave(file.path(FigureFolder, fig.name), 
+              plot = Fig, units = 'in', width = 18, height = 12)
+SuppLegends[[supFig_count]] <- "Demonstration of how cancer subtypes are context/objective dependent.
+A) Heatmap of patient cluster memberships based on different objectives: optimum stratification based on overall survival or progression free survival, molecular homogeneity (TCGA pan-GI subtypes), or micro-satellite instability (MSI) status. Columns are ordered first by membership in the optimum Overall Survival cluster membership. B) Pairwise Adjusted Mutual Information (AMI) of cluster labels obtained via different patient stratification methods. The AMI value ranges from 0 to 1 and the higher the value, the more overlap between patient partitions."
+```
+
 
 ```{r print_figures, results='asis', include=TRUE}
 base_url <- 'https://bimsbstatic.mdc-berlin.de'
