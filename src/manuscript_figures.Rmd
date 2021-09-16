@@ -924,7 +924,7 @@ p2 <- ggscatter(umap, x = 'UMAP1', y = 'UMAP2', color = 'response', size = 2)  +
 gbm_surv <- read.csv(file.path(folder, "survival_time_response_and_predictions.csv"), row.names = 1)
 gbm_surv <- gbm_surv[,c(3, 5:7)]
 panel_titles <- c('observed response', 'MAUI + MGMT', 
-                  'MAUI + MGMT-expression', 'MAUI + MGMT-methylation')
+                  'MGMT-expression', 'MGMT-methylation')
 plots <- sapply(simplify = F, 1:ncol(gbm_surv), function(i) {
   x <- colnames(gbm_surv)[i]
   plot_survival(surv, partition.df = gbm_surv[,x,drop = F], duration_col = 'PFI.time', event_col = 'PFI')[['plot']] + 
