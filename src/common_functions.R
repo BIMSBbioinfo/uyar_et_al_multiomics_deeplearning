@@ -235,8 +235,34 @@ predict_cluster_labels <- function(M, labels, partition = 0.7, ...) {
   return(auc.dt)
 }
 
+# simplified version of predict_cluster_labels_glmnet
+predict_categorical <- function(df, ref_class) {
+  require(caret)
+  require(ranger)
+  # for each factor level, do a one-vs-all classification with probabilities
+  df$y <- as.factor(ifelse(df$y == ref_class, 'one', 'rest'))
+  set.seed(3456)
+  intrain <- caret::createDataPartition(y = df$y, p= 0.6, list = FALSE)
+  training <- df[intrain,]
+  testing <- df[-intrain,]
+  # Build the model using the training set
+  set.seed(123)
+  require(doParallel)
+  cl <- makePSOCKcluster(5)
+  registerDoParallel(cl)
+  ctrl <- trainControl("repeatedcv", repeats = 5, number = 5, sampling = 'down')
+  model <- train(
+    y ~., data = training, method = "glmnet",
+    trControl = ctrl,
+    tuneLength = 10
+  )
+  stopCluster(cl)
+  return(model)
+}
+
 # returnROC: if set to TRUE, will return a ROC object, when FALSE returns AUC stats 
-predict_cluster_labels_glmnet <- function(M, labels, returnROC = FALSE) {
+predict_cluster_labels_glmnet <- function(M, labels, returnModel = FALSE, returnROC = FALSE, 
+                                          repeats = NULL, sampling = NULL) {
   require(caret)
   require(ranger)
   df <- data.frame(M)
@@ -245,6 +271,7 @@ predict_cluster_labels_glmnet <- function(M, labels, returnROC = FALSE) {
   res <- sapply(simplify = F, levels(labels), function(x) {
     message(x)
     df$y <- as.factor(ifelse(labels == x, 'one', 'rest'))
+    df <- df[!is.na(df$y),]
     set.seed(3456)
     intrain <- caret::createDataPartition(y = df$y, p= 0.6, list = FALSE)
     training <- df[intrain,]
@@ -255,12 +282,16 @@ predict_cluster_labels_glmnet <- function(M, labels, returnROC = FALSE) {
       require(doParallel)
       cl <- makePSOCKcluster(5)
       registerDoParallel(cl)
+      ctrl <- trainControl("repeatedcv", number = 5)
+      if(!is.null(sampling)) {ctrl$sampling <- sampling}
+      if(!is.null(repeats)) {ctrl$repeats <- repeats}
       model <- train(
         y ~., data = training, method = "glmnet",
-        trControl = trainControl("cv", number = 5),
+        trControl = ctrl,
         tuneLength = 10
       )
       stopCluster(cl)
+      if(returnModel == TRUE) {return(model)}
       # Best tuning parameter
       message("Best model parameters: alpha=", model$bestTune$alpha, 
               " lambda=", model$bestTune$lambda)
@@ -285,7 +316,6 @@ predict_cluster_labels_glmnet <- function(M, labels, returnROC = FALSE) {
   }
   return(res)
 }
-
 
 predict_labels_glmnet_multiclass <- function(M, labels, partition = 0.6, nodes = 5) {
   df <- data.frame(M)
