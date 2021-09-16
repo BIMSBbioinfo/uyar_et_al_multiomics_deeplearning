@@ -22,7 +22,7 @@ bash ./src/compile_figures.sh /opt/R-4.0.2/lib64/R/bin/Rscript `pwd`/src/manuscr
 
 manuscript figures:
 # for  testing
-nohup bash ./src/compile_figures.sh /opt/R/4.0/bin/Rscript ./src/manuscript_figures.Rmd `pwd`/results/hallmarks_many_LFs/settings.yaml /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas/test /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas/test > figures.log
+nohup time -v bash ./src/compile_figures.sh /opt/R/4.0/bin/Rscript ./src/manuscript_figures.Rmd `pwd`/results/hallmarks_xcell/settings.yaml /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas/test /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas/test > figures.log
 
 # for releasing
-nohup bash ./src/compile_figures.sh /opt/R/4.0/bin/Rscript ./src/manuscript_figures.Rmd `pwd`/results/hallmarks_many_LFs/settings.yaml /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas > figures.log
+nohup time -v bash ./src/compile_figures.sh /opt/R/4.0/bin/Rscript ./src/manuscript_figures.Rmd `pwd`/results/hallmarks_xcell/settings.yaml /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas > figures.log
