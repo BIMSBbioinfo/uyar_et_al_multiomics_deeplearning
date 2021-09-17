@@ -461,6 +461,7 @@ stats <- do.call(rbind, lapply(names(results), function(x) {
 
 stats$project <- unlist(lapply(strsplit(stats$experiment, "\\."), function(x) x[[1]]))
 
+
 # plot correlation scores for all cohorts 
 p1 <- ggplot(stats[purity_method == 'IHC'][grep('TCGA', project)], 
        aes(x = reorder(project, COR), y = COR, fill = COR),) + 
@@ -469,7 +470,24 @@ p1 <- ggplot(stats[purity_method == 'IHC'][grep('TCGA', project)],
   theme(axis.title.y = element_blank(), legend.position = 'none') + 
   labs(y = "MAUI vs IHC") + ylim(0, 1)
 
-p2 <- ggplot(stats[purity_method == 'CPE'][grep('TCGA', project)], 
+# compute other tools' correlations with IHC
+tp <- get_tumor_purity_estimates()
+absolute <- tp[!is.na(ABSOLUTE), mean(cor(ABSOLUTE, IHC, use = 'complete.obs')),by = project]
+estimate <- tp[!is.na(ESTIMATE), mean(cor(ESTIMATE, IHC, use = 'complete.obs')),by = project]
+lump <- tp[!is.na(LUMP), mean(cor(LUMP, IHC, use = 'complete.obs')),by = project]
+
+dt <- stats[purity_method == 'IHC']
+colnames(dt)[3] <- 'MAUI'
+dt$ABSOLUTE <- absolute[match(dt$project, project)]$V1
+dt$LUMP <- lump[match(dt$project, project)]$V1
+dt$ESTIMATE <- estimate[match(dt$project, project)]$V1
+
+mdt <- melt(dt, measure.vars = c('MAUI', 'ABSOLUTE', 'ESTIMATE', 'LUMP'), id.vars = 'project')
+p2 <- ggboxplot(mdt, x = 'variable', y = 'value', add = 'jitter', color = 'variable') +
+  theme(legend.position = 'none', axis.title.x = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(y = 'Average Correlation with IHC')
+
+p3 <- ggplot(stats[purity_method == 'CPE'][grep('TCGA', project)], 
        aes(x = reorder(project, COR), y = COR, fill = COR)) + 
   geom_bar(stat = 'identity') +
   coord_flip() +
@@ -477,7 +495,7 @@ p2 <- ggplot(stats[purity_method == 'CPE'][grep('TCGA', project)],
   labs(y = "MAUI vs CPE") + ylim(0, 1)
 
 # correlation plots for top cancer types
-selected <- stats[purity_method == 'IHC'][grep('TCGA', experiment)][order(COR, decreasing = T)][1:4]$experiment
+selected <- stats[purity_method == 'IHC'][grep('TCGA', experiment)][order(COR, decreasing = T)][1:2]$experiment
 plots <- lapply(selected, function(x) {
   message(x)
   p <- cowplot::plot_grid(plotlist = lapply(names(results[[x]]), function(y) {
@@ -490,12 +508,11 @@ plots <- lapply(selected, function(x) {
   return(p)
 })
 
-p3 <- cowplot::plot_grid(plotlist = plots, ncol = 1)
+p4 <- cowplot::plot_grid(plotlist = plots, ncol = 1)
 
 # supplementary figure
-supFig <- cowplot::plot_grid(cowplot::plot_grid(p1, p2, labels = c('A', 'B')), 
-                             p3, nrow = 2, labels = c('', 'C'), 
-                             rel_heights = c(2, 5))
+supFig <- cowplot::plot_grid(cowplot::plot_grid(p1, p2, p3, labels = c('A', 'B', 'C'), nrow = 1), 
+                             p4, nrow = 2, labels = c('', 'D'))
 
 # print p3 to supplements 
 supFig_count <- supFig_count + 1
@@ -506,9 +523,11 @@ ggsave(file.path(FigureFolder, fig.name),
               plot = supFig, units = 'in', width = 8.27, height = 11.69)
 SuppLegends[[supFig_count]] <- "Predicting tumor purity estimates using MAUI latent factors. 
 A) Correlation of the MAUI predictions of IHC versus the annotated IHC values (immunohistochemistry-based tumor purity estimation). 
-B) Correlation of the MAUI predictions of CPE versus the annotated CPE levels (CPE stands for consensus purity estimated by computational methods: ABSOLUTE, ESTIMATE, and LUMP). 
-C) Scatterplots of MAUI predictions versus the annotated IHC and CPE values for the 
-top best predicted cancer types."
+B) Comparison of average correlations between computational estimates of IHC values by different tools. Each point represents the 
+value obtained for each of the TCGA cohorts seen in panel A. ABSOLUTE tool lacks estimates for 6 out of 14 cancer types. 
+C) Correlation of the MAUI predictions of CPE versus the annotated CPE levels (CPE stands for consensus purity estimated by computational methods: ABSOLUTE, ESTIMATE, and LUMP). 
+D) Scatterplots of MAUI predictions versus the annotated IHC and CPE values for the 
+top two best predicted cancer types with respect to annotated IHC values."
 ```
 
 
