@@ -1131,7 +1131,7 @@ process_clinical_covariates <- function(patientIDs) {
 }
 
 
-get_tumor_purity_estimates <- function(patientIDs) {
+get_tumor_purity_estimates <- function(patientIDs = NULL) {
   dt <- data.table::data.table(TCGAbiolinks::Tumor.purity)
   dt <- data.table('Sample.ID' = dt$Sample.ID, 
              'ESTIMATE' = as.numeric(gsub(",", ".", dt$ESTIMATE)), 
@@ -1139,7 +1139,11 @@ get_tumor_purity_estimates <- function(patientIDs) {
              'LUMP' = as.numeric(gsub(",", ".", dt$LUMP)), 
              'IHC' = as.numeric(gsub(",", ".", dt$IHC)), 
              'CPE' = as.numeric(gsub(",", ".", dt$CPE)), 
+             'project' = paste0('TCGA-', dt$Cancer.type), 
              'bcr_patient_barcode' = sub("^(TCGA.{8}).+?$", "\\1", dt$Sample.ID))
+  if(is.null(patientIDs)) {
+    return(dt)
+  }
   return(dt[bcr_patient_barcode %in% patientIDs])
 }
 
