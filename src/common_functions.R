@@ -395,6 +395,7 @@ predict_numerical_glmnet <- function(M, y, partition = 0.6) {
   df <- data.frame(M)
   df$y <- y
   df <- df[!is.na(df$y),]
+  set.seed(3456)
   intrain <- caret::createDataPartition(y = df$y, p = partition, list = FALSE)
   training <- df[intrain,]
   testing <- df[-intrain,]
@@ -402,7 +403,8 @@ predict_numerical_glmnet <- function(M, y, partition = 0.6) {
   set.seed(123)
   model <- caret::train(
     y ~., data = training, method = "glmnet",
-    trControl = trainControl("cv", number = 5, allowParallel = F),
+    trControl = trainControl("repeatedcv", repeats = 5, 
+                             number = 5, allowParallel = F),
     tuneLength = 10
   )
   # Best tuning parameter
