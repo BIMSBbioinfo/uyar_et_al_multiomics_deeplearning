@@ -962,7 +962,7 @@ Figures[[fig_count]] <- Fig
 fig.name <- paste0('Figure', fig_count, '.tmz_gbm.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name),
-              plot = Fig, units = 'in', width = 10, height = 6)
+              plot = Fig, units = 'in', width = 9, height = 11)
 Legends[[fig_count]] <- "Predicting TMZ resistance in GBM patients. A) Area under the ROC (AUC) for 5-fold cross-validation predictions of response to TMZ. MAUI latent factors outperform both MGMT expression and MGMT promoter methylation, and the best performance is achieved by combining MAUI latent factors with MGMT expression. B) 2D UMAP projection of TCGA-GBM samples based on MAUI latent factors which are predictive of TMZ response. Responders and non-responders tend to cluster separately. C) Kaplan-Meier curves for progression-free interval for responders and non-responders to TMZ. Response defined as progression-free interval of at least six months, non- or partial-response defined as tumor progression within six months of treatment. D) Kaplan-Meier curves for progression-free intervals for predicted responders and non-responders using MAUI latent factors combined with MGMT expression. E) Kaplan-Meier curves for progression-free intervals for predicted responders and non-responders using MGMT expression. F) Kaplan-Meier curves for progression-free intervals for predicted responders and non-responders using MGMT promoter methylation."
 
 # supplementary figure
