@@ -145,7 +145,7 @@ p4 <- plot_label_specific_vars(M, ct)
 # data type contribution to top LF per factor
 p5 <- plot_datatype_contribution_by_factor(LFs, FWs, 'maui_factors', 
                                            'pancancer', 'cnv_gex_meth_mut', factors = ct, 
-                                           top_lfs = 1, top_features = 500) 
+                                           top_lfs = 1, top_features = 100) 
 p5 <- p5 + labs(y = 'Relative Contribution\nto top latent factor') + 
   theme(legend.position = 'right', legend.direction = 'vertical', 
         legend.background = element_blank(), 
@@ -233,7 +233,7 @@ fig.name <- paste0('Figure', fig_count, '.benchmarks.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name),
               plot = Fig, units = 'in', width = 12, height = 12)
-Legends[[fig_count]] <- " A) tSNE plot of MAUI latent factors (using top 5 latent factors enriched per cancer type) learned from pan-cancer dataset  B) Percentage of top feature types contributing to top predictive maui latent factor per cancer type. C, D) Comparison of unsupervised clustering performances based on cluster homogeneity (Silhouette) in C and cluster stability (Average Proportion of Non-Overlap (APN) in D. Each point represents a score for an individual clustering experiment in a total of 132 k-means clustering experiments (21 cancer types x for 6 different values of k from 3 to 8) for each tool."
+Legends[[fig_count]] <- " A) tSNE plot of MAUI multi-omics fingerprints (using top 5 fingerprint enriched per cancer type) learned from pan-cancer dataset  B) Percentage of top 100 features by omics types contributing to top predictive MAUI fingerprint per cancer type. C, D) Comparison of unsupervised clustering performances based on cluster homogeneity (Silhouette) in C and cluster stability (Average Proportion of Non-Overlap (APN) in D. Each point represents a score for an individual clustering experiment in a total of 132 k-means clustering experiments (21 cancer types x for 6 different values of k from 3 to 8) for each tool."
 
 # supplementary figure
 supFig <- cowplot::plot_grid(cowplot::plot_grid(p1, p2$gtable, nrow = 1, 
@@ -247,7 +247,7 @@ names(SuppFigures)[supFig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name), 
               plot = supFig, units = 'in', width = 8.27, height = 11.69)
 SuppLegends[[supFig_count]] <- "A) Predictive power of latent factors in distinguishing cancer types comparing MAUI with PCA/MOFA/MCIA. Mean Balanced Accuracy computed on the test dataset (30% of held-out data) trained on 70% of the dataset using an Elastic Net multi-class model. B) Confusion matrix of predicted versus true labels of samples' cancer types. The color of each cell represents the percentage of samples from the cancer type in the rows that are classified into the cancer types on the column. Cells that deviate from the red color represent relatively lower
-level of classification accuracy. C) Top maui LFs detected per cancer type. Size/color/opacity of the points represent the average neural activation value of the LF for the corresponding cancer type samples."
+level of classification accuracy. C) Top MAUI latent factors (multi-omic fingerprints) detected per cancer type. Size/color/opacity of the points represent the average neural activation value of the MAUI fingerprint for the corresponding type of tumor samples."
 ```
 
 
@@ -383,7 +383,7 @@ fig.name <- paste0('Figure', fig_count, '.clinical_factors.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, width = 8.27, height = 11.69, units = 'in')
-Legends[[fig_count]] <- "A) Top significant (padj < 0.05) clinical factor-associated LFs per cancer type. B) Harrell’s C-index for progression-free survival prediction accuracy computed using only clinical factors (age + gender + tumor stage) or using clinical factors along with survival-predictive MAUI LFs."
+Legends[[fig_count]] <- "A) Top significant (padj < 0.05) clinical factor-associated multi-omic fingerprints per cancer type. B) Harrell’s C-index for progression-free survival prediction accuracy computed using only clinical factors (age + gender + tumor stage) or using clinical factors along with survival-predictive MAUI fingerprints"
 
 
 # combine adjusted survival curve plots into a single plot 
@@ -413,7 +413,7 @@ fig.name <- paste0('SuppFigure', supFig_count, '.adjusted_survival_curves.pdf')
 names(SuppFigures)[supFig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name), 
               plot = Fig, units = 'in', width = 8.27, height = 11.69)
-SuppLegends[[supFig_count]] <- "Kaplan-Meier survival curves adjusted for clinical factors (tumor stage + age + gender) stratified by the neural activation values of top survival-predictive LFs per cancer."
+SuppLegends[[supFig_count]] <- "Kaplan-Meier survival curves adjusted for clinical factors (tumor stage + age + gender) stratified by the neural activation values of top survival-predictive multi-omic fingerprints per cancer."
 ```
 
 ```{r tumor_purity} 
@@ -630,7 +630,7 @@ fig.name <- paste0('Figure', fig_count, '.MSI.status.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, units = 'in', width = 12, height = 12)
-Legends[[fig_count]] <- "Latent factors predictive of MSI status (high: MSI-H, stable: MSI-S, low: MSI-L) in pan-gastrointestinal cancers A) Comparison of top latent factor per MSI status for each tool in terms of adjusted p-values reflecting the differences between MSI subgroups. B) ROC curves for prediction accuracy of MSI status using MAUI latent factors C) tSNE plots of samples generated using top MSI-predictive LFs (5 LF per MSI class) colored by MSI status D) tSNE plots of samples colored by MAUI latent factor LF25, which is most predictive of MSI-H samples. E) Distribution of MAUI latent factor LF25 across MSI subgroups in the pan-gastrointestinal cancer samples. F) Relative abundance of omics feature types among the top 500 features contributing to MAUI latent factor LF25."
+Legends[[fig_count]] <- "Latent factors predictive of MSI status (high: MSI-H, stable: MSI-S, low: MSI-L) in pan-gastrointestinal cancers A) Comparison of top latent factor per MSI status for each tool in terms of adjusted p-values reflecting the differences between MSI subgroups. B) ROC curves for prediction accuracy of MSI status using MAUI latent factors (multi-omic fingerprints) C) tSNE plots of samples generated using top MSI-predictive fingerprints (5 LF per MSI class) colored by MSI status D) tSNE plots of samples colored by MAUI fingerprint LF25, which is most predictive of MSI-H samples. E) Distribution of MAUI fingerprint LF25 across MSI subgroups in the pan-gastrointestinal cancer samples. F) Relative abundance of omics feature types among the top 500 features contributing to MAUI fingerprint LF25."
 ```
 
 ```{r}
@@ -733,10 +733,10 @@ ggsave(filename = file.path(FigureFolder, fig.name),
        Fig, units = 'in', 
        width = 8.27, height = 11.69)
 
-Legends[[fig_count]] <- "Classification of Non-Small-Cell Lung Adenocarcinoma samples using MAUI latent factors.
-A) ROC curves with AUC values on testing data (40% of the dataset) using an Elastic Net model with 5-fold cross-validation. B) t-SNE plot of MAUI LFs colored by cancer types. C) t-SNE plot of MAUI LFs colored by 
-the top most-predictive latent factor for TCGA-LUSC samples. D) t-SNE plot of MAUI LFs colored by the top 
-most predictive latent factor for TCGA-LUAD samples. E) Decision tree visualisation of top LF-associated omics markers detected that can be used to distinguish LUSC and LUAD subtypes."
+Legends[[fig_count]] <- "Classification of Non-Small-Cell Lung Adenocarcinoma samples using MAUI multi-omic fingerprints.
+A) ROC curves with AUC values on testing data (40% of the dataset) using an Elastic Net model with 5-fold cross-validation. B) t-SNE plot of MAUI fingerprints colored by cancer types. C) t-SNE plot of MAUI fingerprints colored by 
+the top most-predictive fingerprint for TCGA-LUSC samples. D) t-SNE plot of MAUI fingerprints colored by the top 
+most predictive fingerprint for TCGA-LUAD samples. E) Decision tree visualisation of top MAUI fingerprint-associated omics markers detected that can be used to distinguish LUSC and LUAD subtypes."
 ```
 
 ```{r immunotherapy_response}
@@ -905,9 +905,9 @@ ggsave(filename = file.path(FigureFolder, fig.name),
        plot = Fig, units = 'in', 
        width = 12, height = 14)
 Legends[[fig_count]] <- "Predicting responders to anti-PD-L1 treatment in a cohort of Metastatic Urothelial
-Cancers (N=216) using MAUI. A) Comparison of top latent factors predictive of complete/partial response (CR/PR) to the anti-PD-L1. B) Comparison of top latent factors predictive of immune phenotypes (inflamed/excluded/desert). C)  Comparison of top latent factors with respect to their correlation with tumor mutation burden status of the samples in the cohort D) Survival stratification of the cohort based activation score of top MAUI latent factor E) Average value of top MAUI LFs predictive of response to anti-PD-L1 response groups.
+Cancers (N=216) using MAUI. A) Comparison of top latent factors predictive of complete/partial response (CR/PR) to the anti-PD-L1. B) Comparison of top latent factors predictive of immune phenotypes (inflamed/excluded/desert). C)  Comparison of top latent factors with respect to their correlation with tumor mutation burden status of the samples in the cohort D) Survival stratification of the cohort based activation score of top MAUI latent factor (fingerprint) E) Average value of top MAUI latent factors (fingerprints) predictive of response to anti-PD-L1 response groups.
 F) Comparison of marker combinations in terms of accuracy in predicting anti-PD-L1 response. TMB: tumor mutation burden, 
-CD8_Teff: 12 gene signature for CD8+ effector T-cells, F_TBRS: 4-gene pan-fibroblast TGFβ response signature, MAUI: top predictive MAUI LFs as seen in panel E). Each bar plot represents prediction accuracy (AUC) when using the corresponding subset of variables in an Elastic Net model."
+CD8_Teff: 12 gene signature for CD8+ effector T-cells, F_TBRS: 4-gene pan-fibroblast TGF-beta response signature, MAUI: top predictive MAUI fingerprints as seen in panel E). Each bar plot represents prediction accuracy (AUC) when using the corresponding subset of variables in an Elastic Net model."
 ```
 
 
@@ -963,7 +963,7 @@ fig.name <- paste0('Figure', fig_count, '.tmz_gbm.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(file.path(FigureFolder, fig.name),
               plot = Fig, units = 'in', width = 9, height = 11)
-Legends[[fig_count]] <- "Predicting TMZ resistance in GBM patients. A) Area under the ROC (AUC) for 5-fold cross-validation predictions of response to TMZ. MAUI latent factors outperform both MGMT expression and MGMT promoter methylation, and the best performance is achieved by combining MAUI latent factors with MGMT expression. B) 2D UMAP projection of TCGA-GBM samples based on MAUI latent factors which are predictive of TMZ response. Responders and non-responders tend to cluster separately. C) Kaplan-Meier curves for progression-free interval for responders and non-responders to TMZ. Response defined as progression-free interval of at least six months, non- or partial-response defined as tumor progression within six months of treatment. D) Kaplan-Meier curves for progression-free intervals for predicted responders and non-responders using MAUI latent factors combined with MGMT expression. E) Kaplan-Meier curves for progression-free intervals for predicted responders and non-responders using MGMT expression. F) Kaplan-Meier curves for progression-free intervals for predicted responders and non-responders using MGMT promoter methylation."
+Legends[[fig_count]] <- "Predicting TMZ resistance in GBM patients. A) Area under the ROC curve (AUC) for 5-fold cross-validation predictions of response to TMZ. MAUI multi-omic fingerprints outperform both MGMT expression and MGMT promoter methylation, and the best performance is achieved by combining MAUI fingerprints with MGMT expression. B) 2D UMAP projection of TCGA-GBM samples based on MAUI multi-omic fingerprints which are predictive of TMZ response. Responders and non-responders tend to cluster separately. C) Kaplan-Meier curves for progression-free interval for responders and non-responders to TMZ. Response defined as progression-free interval of at least six months, non- or partial-response defined as tumor progression within six months of treatment. D) Kaplan-Meier curves for progression-free intervals for predicted responders and non-responders using MAUI multi-omic fingerprints combined with MGMT expression. E) Kaplan-Meier curves for progression-free intervals for predicted responders and non-responders using MGMT expression. F) Kaplan-Meier curves for progression-free intervals for predicted responders and non-responders using MGMT promoter methylation."
 
 # supplementary figure
 topGenes <- data.table::fread(file.path(folder, 'top100_genes.csv'))
