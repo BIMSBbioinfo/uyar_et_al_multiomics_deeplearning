@@ -32,8 +32,8 @@ library(survival)
 library(caret)
 library(treeheatr)
 library(partykit)
-
 theme_set(ggpubr::theme_pubclean())
+
 geneSetScoresFolder <- '/data/local/buyar/arcas/subtyping_paper/data/geneset_scores/singscore'
 
 inputDir <- settings$pipeline_output
@@ -296,7 +296,28 @@ p1 <- ggplot(dt, aes(x = project, y = label)) +
   geom_text_repel(aes(label = variable)) + 
   coord_flip() +
   scale_color_gradient(low = 'blue', high = 'red') + 
-  labs(x = '', y = 'clinical factor')
+  theme(axis.title = element_blank())
+
+# make example plots for selected clinical features
+pr <- 'TCGA-LGG' 
+datatype <- 'cnv_gex_meth_mut'
+M <- LFs$maui_factors[[paste0(pr, '.', datatype)]]
+clin <- process_clinical_covariates(rownames(M))
+dt.pr <- dt[padj < 0.05][project == pr][order(padj)]
+# select top 3 clinical features for the project
+plots <- lapply(head(dt.pr$label, 3), function(x) {
+  # get lf, clinical feature and plot distribution 
+  f <- gsub("[\n ]", "_", x)
+  lf <- dt.pr[label == x]$variable
+  df <- cbind(data.frame(M[,lf,drop = F]), clin[,f,drop=F])
+  df <- df[!is.na(df[,f]),]
+  ggpubr::ggboxplot(df, y = lf, x = f, 
+                    color = f, add = 'jitter') + 
+    labs(x = x) + 
+    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) 
+})
+
+p2 <- cowplot::plot_grid(plotlist = plots, nrow = 1, align = 'h')
 
 # 2. survival-predictive factors
 #I look for survival-predictive maui LFs, show how much c-index improves on top of 
@@ -360,9 +381,9 @@ ci <- do.call(rbind, lapply(names(surv.stats), function(x) {
 }))
 
 dt <- melt(ci, id.vars = 'project')
-dt$variable <- ifelse(dt$variable == 'base', 'Age+gender+stage', 'Age+gender+stage + MAUI LFs')
+dt$variable <- ifelse(dt$variable == 'base', 'Age+gender+stage', 'Age+gender+stage + MAUI fingerprints')
 
-p2 <- ggplot(ci, aes(x = reorder(project, with_lf))) + 
+p3 <- ggplot(ci, aes(x = reorder(project, with_lf))) + 
   geom_segment(aes(x = reorder(project, with_lf), xend = project, 
                    y = base, yend = with_lf)) + 
   geom_hline(yintercept = c(0.5, 0.6, 0.7), linetype = 2) + 
@@ -375,7 +396,13 @@ p2 <- ggplot(ci, aes(x = reorder(project, with_lf))) +
         legend.direction = 'vertical', legend.box.background = element_blank()) +
   scale_color_brewer(type = 'qual', palette = 6)
 
-Fig <- cowplot::plot_grid(cowplot::plot_grid(p1, p2, nrow = 2, labels = c('A', 'B')))
+Fig <- cowplot::plot_grid(p1, 
+                          cowplot::plot_grid(p2, p3, 
+                                             nrow = 1, 
+                                             labels = c('B', 'C'), 
+                                             rel_widths = c(2, 2)), 
+                          labels = c('A', ''), 
+                          nrow = 2)
 
 fig_count <- fig_count + 1
 Figures[[fig_count]] <- Fig
@@ -383,8 +410,8 @@ fig.name <- paste0('Figure', fig_count, '.clinical_factors.pdf')
 names(Figures)[fig_count] <- fig.name
 ggsave(filename = file.path(FigureFolder, fig.name), 
        plot = Fig, width = 8.27, height = 11.69, units = 'in')
-Legends[[fig_count]] <- "A) Top significant (padj < 0.05) clinical factor-associated multi-omic fingerprints per cancer type. B) Harrell’s C-index for progression-free survival prediction accuracy computed using only clinical factors (age + gender + tumor stage) or using clinical factors along with survival-predictive MAUI fingerprints"
-
+Legends[[fig_count]] <- "A) Top significant (padj < 0.05) clinical factor-associated multi-omic fingerprints per cancer type. B) MAUI fingerprints enriched for subgroups of different clinical features of TCGA-LGG samples. 
+LF45 is enriched among samples histologically categorized as Oligodendrogliomas; LF54 is enriched among donors of male gender; LF65 is enriched among samples with histological grade of G3. C) Harrell’s C-index for progression-free survival prediction accuracy computed using only clinical factors (age + gender + tumor stage) or using clinical factors along with survival-predictive MAUI fingerprints"
 
 # combine adjusted survival curve plots into a single plot 
 plots <- sapply(simplify = F, names(surv.stats), function(x) {   
