@@ -11,12 +11,11 @@ Cancer is a complex disease with a large financial and healthcare burden on soci
 </p>
 
 
+# 1. TCGA data analysis
 
-# 1. Downloading TCGA data
+## 1.1 Downloading TCGA data
 
-## Omics Data
-
-### GEX + MUT + METH: download.tcga.R
+### 1.1.1 GEX + MUT + METH: download.tcga.R
 This script uses TCGAbiolinks package to download gene expression (FPKM), methylation, and mutation data
 files along with patient-related clinical meta-data. 
 
@@ -30,7 +29,7 @@ example:
 /opt/R/4.0/bin/Rscript ./src/download.tcga.R `pwd` `pwd`/GDCdata_prepared
 ```
 
-### CNVs: download.tcga.firehore.R
+### 1.1.2 CNVs: download.tcga.firehore.R
 
 This script uses RTCGAToolbox and TCGAbiolinks packages to download Somatic Copy Number Alteration (GISTIC scores) 
 from BROAD Firehose data. 
@@ -43,7 +42,7 @@ usage:
 /opt/R/4.0/bin/Rscript ./src/download.tcga.firehose.R `pwd`/GDCdata/FirehoseData `pwd`/GDCdata_prepared 
 ```
 
-### MSI: download.tcga.MSI.R
+### 1.1.3 MSI: download.tcga.MSI.R
 
 This script uses TCGAbiolinks data to download Microsatellite Instability (MSI) status annotations for 
 TCGA projects (pan-gastrointestinal cancers). 
@@ -56,14 +55,14 @@ usage:
 /opt/R/4.0/bin/Rscript ./src/download.tcga.MSI.R `pwd` `pwd`/GDCdata_prepared
 ```
 
-### Clinical data
+### 1.1.4 Clinical data
 
 Pancancer survival and further clinical data from [Liu J. et al, Cell, 2018](https://www.sciencedirect.com/science/article/pii/S0092867418302290?via%3Dihub)
 can be imported using the `RDS` object under `./data/TCGA.surv.RDS`.
 
 Pancancer clinical data downloaded from TCGA can be imported using the `RDS` object under `./data/TCGA.clin.RDS`. 
 
-# 2. Analysis
+## 1.2. Multi-omics Integration of TCGA data
 
 Here we describe how to prepare the omics datasets and how to run multi-omics integration tools: MAUI, MOFA, MCIA, and PCA. 
 
@@ -73,7 +72,7 @@ Both scripts require a `settings.yaml` file which includes all necessary input a
 
 See `./settings.yaml` file that was used as input for both scripts.
 
-## Preparing omics datasets 
+### 1.2.1 Preparing omics datasets 
 
 Here we prepare the input files for multi-omics integration tools. The input files for 
 these tools will be prepared under `./assays` folder. 
@@ -83,7 +82,7 @@ usage:
 /opt/R/4.0/bin/Rscript ./src/setup_experiments.R --settings ./settings.yaml
 ```
 
-## Running multi-omics integration tools 
+### 1.2.2 Running multi-omics integration tools 
 
 Here we run a snakemake pipeline which invokes commands to run MAUI, MOFA, MCIA, and PCA to 
 do multi-omics integration. The outputs including the learned latent factors along with feature importance 
@@ -94,6 +93,35 @@ usage:
 ```
 time snakemake -p -s ./src/snakefile.py -j 10 --configfile ./settings.yaml --keep-going
 ```
+
+
+# 2. anti-PD-L1 (Immunotherapy Response) Data Analysis 
+
+anti-PD-L1 (immunotherapy) response prediction was carried out using transcriptome data from [Mariathasan et al, Nature, 2018](https://www.nature.com/articles/nature25501). 
+
+## 2.1 Data download and preparation
+
+The transcriptome data was extracted from the source of the R package [IMvigor210CoreBiologies](http://research-pub.gene.com/IMvigor210CoreBiologies). 
+
+- Download and unpack source code of `IMvigor210CoreBiologies` from here: http://research-pub.gene.com/IMvigor210CoreBiologies/packageVersions/IMvigor210CoreBiologies_0.1.13.tar.gz
+
+- Run `prepare_data.immther.R` script to prepare data for processing with MAUI, MOFA, and PCA. (MCIA doesn't work with a single omics layer). 
+
+usage:
+<path to Rscript> ./src/prepare_data.immther.R <path to source folder for IMvigor210CoreBiologies> <path to gene sets file>
+```
+/opt/R/4.0/bin/Rscript ./src/prepare_data.immther.R ./IMvigor210CoreBiologies ./data/hallmarks_plus_xcell.txt
+```
+
+## 2.2 Run omics tools 
+
+We run MAUI, MOFA, and PCA to learn latent factors for this dataset. 
+
+usage
+```
+time snakemake -p -s ./src/snakefile.py -j 4 --configfile ./data/settings_immther.yaml --keep-going
+```
+
 
 # 3. Manuscript Figures
 
