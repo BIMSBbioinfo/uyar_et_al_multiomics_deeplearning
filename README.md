@@ -12,7 +12,7 @@ Cancer is a complex disease with a large financial and healthcare burden on soci
 
 
 
-# Downloading TCGA
+# 1. Downloading TCGA data
 
 ## Omics Data
 
@@ -23,10 +23,12 @@ files along with patient-related clinical meta-data.
 The data is first downloaded into the "GDCdata" sub-folder in the current working directory. 
 From there the data is further processed and prepared, which is written under "GDCdata_prepared".
 
-usage: 
+usage:
+``` 
 <path to Rscript> ./src/download.tcga.R <target folder to save GDCdata> <target folder to save prepared data>
 example: 
 /opt/R/4.0/bin/Rscript ./src/download.tcga.R `pwd` `pwd`/GDCdata_prepared
+```
 
 ### CNVs: download.tcga.firehore.R
 
@@ -37,7 +39,9 @@ The data is first downloaded into the "/GDCdata/FirehoseData" sub-folder in the 
 From there the data is further processed and prepared, which is written under "GDCdata_prepared".
 
 usage:
+```
 /opt/R/4.0/bin/Rscript ./src/download.tcga.firehose.R `pwd`/GDCdata/FirehoseData `pwd`/GDCdata_prepared 
+```
 
 ### MSI: download.tcga.MSI.R
 
@@ -48,7 +52,9 @@ The data is first downloaded into the "/GDCdata/FirehoseData" sub-folder in the 
 From there the data is further processed and prepared, which is written under "GDCdata_prepared".
 
 usage: 
+```
 /opt/R/4.0/bin/Rscript ./src/download.tcga.MSI.R `pwd` `pwd`/GDCdata_prepared
+```
 
 ### Clinical data
 
@@ -57,7 +63,7 @@ can be imported using the `RDS` object under `./data/TCGA.surv.RDS`.
 
 Pancancer clinical data downloaded from TCGA can be imported using the `RDS` object under `./data/TCGA.clin.RDS`. 
 
-# Analysis
+# 2. Analysis
 
 Here we describe how to prepare the omics datasets and how to run multi-omics integration tools: MAUI, MOFA, MCIA, and PCA. 
 
@@ -73,7 +79,9 @@ Here we prepare the input files for multi-omics integration tools. The input fil
 these tools will be prepared under `./assays` folder. 
 
 usage: 
+```
 /opt/R/4.0/bin/Rscript ./src/setup_experiments.R --settings ./settings.yaml
+```
 
 ## Running multi-omics integration tools 
 
@@ -82,14 +90,17 @@ do multi-omics integration. The outputs including the learned latent factors alo
 values are written under `./output`. 
 
 usage:
-time snakemake -p -s ./src/snakefile.py -j 10 --configfile ./settings.yaml --keep-going
 
-# Manuscript Figures
+```
+time snakemake -p -s ./src/snakefile.py -j 10 --configfile ./settings.yaml --keep-going
+```
+
+# 3. Manuscript Figures
 
 `compile_figures.sh` script is used to invoke `manuscript_figures.Rmd` file to make the manuscript figures in this study. 
 
 usage: 
 
-manuscript figures:
-# for releasing
+```
 nohup time -v bash ./src/compile_figures.sh /opt/R/4.0/bin/Rscript ./src/manuscript_figures.Rmd `pwd`/results/hallmarks_xcell/settings.yaml /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas > figures.log
+```
