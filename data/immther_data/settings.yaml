@@ -1,0 +1,27 @@
+## script with useful functions 
+utility_script: ./src/common_functions.R
+## ensembl to hgnc mapping object
+ens2hgnc: ./data/ens2hgnc.RDS
+## clinical data 
+clin: ./assays_immther/mariathasan.colData.csv
+## names of genes of interest for input feature subsetting (one gene per line) 
+geneset: ./data/hallmarks_plus_xcell.txt 
+
+# tool settings
+maui:
+  nfactors: 100
+  epochs: 500
+  threads: 10
+  batch_size: 100
+mofa: 
+  nfactors: 100 
+mcia: 
+  nfactors: 20
+pca: 
+  nfactors: 100
+RSCRIPT_EXEC: /opt/R/4.0/bin/Rscript
+
+# folder to write the assays to 
+assay_output: 
+  folder: ./assays_immther
+pipeline_output: ./output_immther
