@@ -108,8 +108,9 @@ The transcriptome data was extracted from the source of the R package [IMvigor21
 - Run `prepare_data.immther.R` script to prepare data for processing with MAUI, MOFA, and PCA. (MCIA doesn't work with a single omics layer). 
 
 usage:
-<path to Rscript> ./src/prepare_data.immther.R <path to source folder for IMvigor210CoreBiologies> <path to gene sets file>
+
 ```
+<path to Rscript> ./src/prepare_data.immther.R <path to source folder for IMvigor210CoreBiologies> <path to gene sets file>
 /opt/R/4.0/bin/Rscript ./src/prepare_data.immther.R ./IMvigor210CoreBiologies ./data/hallmarks_plus_xcell.txt
 ```
 
@@ -119,7 +120,7 @@ We run MAUI, MOFA, and PCA to learn latent factors for this dataset.
 
 usage
 ```
-time snakemake -p -s ./src/snakefile.py -j 4 --configfile ./data/settings_immther.yaml --keep-going
+time snakemake -p -s ./src/snakefile.py -j 4 --configfile ./settings_immther.yaml --keep-going
 ```
 
 
@@ -130,5 +131,7 @@ time snakemake -p -s ./src/snakefile.py -j 4 --configfile ./data/settings_immthe
 usage: 
 
 ```
-nohup time -v bash ./src/compile_figures.sh /opt/R/4.0/bin/Rscript ./src/manuscript_figures.Rmd `pwd`/results/hallmarks_xcell/settings.yaml /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas /data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas > figures.log
+nohup time -v bash ./src/compile_figures.sh /opt/R/4.0/bin/Rscript ./src/manuscript_figures.Rmd ./settings.yaml `pwd` `pwd` > figures.log
 ```
+
+
