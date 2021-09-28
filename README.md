@@ -1,9 +1,13 @@
 
 # Introduction
 
-The purpose of this repository is to provide the scripts that are used to produce the figures for the manuscript by Uyar et al, 2021.
-
-## "Multi-omics and deep learning provide a multifaceted view of cancer". 
+The purpose of this repository is to provide the scripts that are used to produce the figures for the manuscript:
+```
+Multi-omics and deep learning provide a multifaceted view of cancer
+Bora Uyar¹, Jonathan Ronen¹, Vedran Franke¹, Gaetano Garguilo², Altuna Akalin¹
+1 Bioinformatics and Omics Data Science Platform, Max Delbrück Center (MDC) for Molecular Medicine, The Berlin Institute for Medical Systems Biology, Hannoversche Str. 28, 10115 Berlin, Germany
+2 Molecular Oncology, Max Delbrück Center (MDC) for Molecular Medicine, Robert-Rössle-Stsse 10, 13125 Berlin, Germany
+```
 Cancer is a complex disease with a large financial and healthcare burden on society. One hallmark of the disease is the uncontrolled growth and proliferation of malignant cells. Unlike Mendelian diseases which may be explained by a few genomic loci, a deeper molecular and mechanistic understanding of the development of cancer is needed. Such an endeavor requires the integration of tens of thousands of molecular features across multiple layers of information encoded in the cells. In practical terms, this implies integration of multi omics information from the genome, transcriptome, epigenome, proteome, metabolome, and even micro-environmental factors such as the microbiome. Finding mechanistic insights and biomarkers in such a high dimensional space is a challenging task. Therefore, efficient machine learning techniques are needed to reduce the dimensionality of the data while simultaneously discovering complex but meaningful biomarkers. These markers then can lead to testable hypotheses in research and clinical applications. In this study, we applied advanced deep learning methods to uncover multi-omic fingerprints that are associated with a wide range of clinical and molecular features of tumor samples. Using these fingerprints, we can accurately classify different cancer types, and their subtypes. Non-linear multi-omic fingerprints can uncover clinical features associated with patient survival and response to treatment, ranging from chemotherapy to immunotherapy. In addition, multi-omic fingerprints may be deconvoluted into a meaningful subset of genes and genomic alterations to support clinically relevant decisions. 
 
 <p align="center">
