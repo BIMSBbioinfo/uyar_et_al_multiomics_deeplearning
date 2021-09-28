@@ -1,19 +1,19 @@
 ## folder with prepared GDC data 
-GDCdataDir: ./GDCdata_prepared
+GDCdataDir: GDCdata_prepared
 ## script with useful functions 
-utility_script: ./src/common_functions.R
+utility_script: src/common_functions.R
 ## ensembl to hgnc mapping object
-ens2hgnc: ./data/ens2hgnc.RDS
+ens2hgnc: data/ens2hgnc.RDS
 ## cpg site to hgnc mapping object
-cpg2hgnc: ./data/cpg2hgnc.RDS
+cpg2hgnc: data/cpg2hgnc.RDS
 ## curated survival/clinical data
-surv: ./data/TCGA.surv.RDS
+surv: data/TCGA.surv.RDS
 ## clinical data 
-clin: ./data/TCGA.clin.RDS
+clin: data/TCGA.clin.RDS
 ## project dictionary (a mapping of project names to list of tcga cancer types)
-projectDict: ./data/projects.dict.yaml
+projectDict: data/projects.dict.yaml
 ## names of genes of interest for input feature subsetting (one gene per line) 
-geneset: ./hallmarks_plus_xcell.txt
+geneset: data/hallmarks_plus_xcell.txt
 
 # tool settings
 maui:
@@ -36,10 +36,10 @@ features:
   topN: 2500 # features will be sorted by variance and top features will be selected
 # folder to write the assays to 
 assay_output: 
-  folder: ./assays
+  folder: assays
   printCSV: TRUE # whether to print the assays as CSV files
   printRDS: TRUE # whether to print the assays as RDS files
-pipeline_output: ./output
+pipeline_output: output
 # whether to correct for batches (only applies to gene expression data)
 correctBatches: FALSE 
 datatypes: 
