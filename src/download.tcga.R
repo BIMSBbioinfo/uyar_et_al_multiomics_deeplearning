@@ -53,10 +53,10 @@ projects <- projects[grepl('^TCGA',projects,perl=T)]
 
 setwd(downloaddir)
 
-cl <- parallel::makeCluster(2, outfile = 'download.tcga.log')
+cl <- parallel::makeCluster(10, outfile = 'download.tcga.log')
 parallel::clusterExport(cl = cl, varlist = c('get_Data', 'outDir'))
 
-parallel::parLapply(cl = cl, X = projects[1:2], fun = function(pr) {
+parallel::parLapply(cl = cl, X = projects, fun = function(pr) {
   require("TCGAbiolinks")
   message(date()," => Processing project:",pr)
 
