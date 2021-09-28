@@ -1,11 +1,11 @@
 ## script with useful functions 
-utility_script: ./src/common_functions.R
+utility_script: src/common_functions.R
 ## ensembl to hgnc mapping object
-ens2hgnc: ./data/ens2hgnc.RDS
+ens2hgnc: data/ens2hgnc.RDS
 ## clinical data 
-clin: ./assays_immther/mariathasan.colData.csv
+clin: assays_immther/mariathasan.colData.csv
 ## names of genes of interest for input feature subsetting (one gene per line) 
-geneset: ./data/hallmarks_plus_xcell.txt 
+geneset: data/hallmarks_plus_xcell.txt 
 
 # tool settings
 maui:
@@ -23,5 +23,5 @@ RSCRIPT_EXEC: /opt/R/4.0/bin/Rscript
 
 # folder to write the assays to 
 assay_output: 
-  folder: ./assays_immther
-pipeline_output: ./output_immther
+  folder: assays_immther
+pipeline_output: output_immther
