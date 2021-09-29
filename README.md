@@ -132,12 +132,12 @@ time snakemake -p -s ../src/snakefile.py -j 4 --configfile ./settings_immther.ya
 
 # 3. Manuscript Figures
 
-`compile_figures.sh` script is used to invoke `manuscript_figures.Rmd` file to make the manuscript figures in this study. 
+`compile_figures.R` script is used to invoke `manuscript_figures.Rmd` file to make the manuscript figures in this study. 
 
 usage: 
 
 ```
-nohup time -v bash ./src/compile_figures.sh /opt/R/4.0/bin/Rscript ./src/manuscript_figures.Rmd ./settings.yaml `pwd` `pwd` > figures.log
+nohup time -v /opt/R/4.0/bin/Rscript ./src/compile_figures.R ./src/manuscript_figures.Rmd `pwd`/settings.yaml `pwd`/immunotherapy_analysis `pwd`/data/tmz_gbm_figure_data `pwd`/figures `pwd` > figures.log
 ```
 
 
