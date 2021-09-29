@@ -23,5 +23,5 @@ RSCRIPT_EXEC: /opt/R/4.0/bin/Rscript
 
 # folder to write the assays to 
 assay_output: 
-  folder: assays_immther
-pipeline_output: output_immther
+  folder: assays
+pipeline_output: output

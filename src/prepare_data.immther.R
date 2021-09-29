@@ -32,23 +32,23 @@ normCounts <- normCounts[-match(names(which(table(rownames(normCounts)) > 1)),
 
 
 # create folder to save processed data
-dir.create(file.path(getwd(), 'assays_immther'))
-dir.create(file.path(getwd(), 'data_immther'))
+dir.create(file.path(getwd(), 'assays'))
+dir.create(file.path(getwd(), 'data'))
 
 # Save all normalized genes as RDS
-saveRDS(scale(log(normCounts+1)), file.path(getwd(), 'data_immther', 'mariathasan.gex.all_genes.normalised.RDS'))
+saveRDS(scale(log(normCounts+1)), file.path(getwd(), 'data', 'mariathasan.gex.all_genes.normalised.RDS'))
 
 # pick top 5000 genes by sd
 normCounts <- normCounts[names(sort(apply(normCounts, 1, sd), decreasing = T)[1:5000]),]
 
 # scale and save count table for analysis by dimension reducction tools
-out <- file.path(getwd(), 'assays_immther', "mariathasan.gex")
+out <- file.path(getwd(), 'assays', "mariathasan.gex")
 write.table(x = scale(log(normCounts+1)), 
             file = paste0(out, '.csv'), quote = F, row.names = T, sep = ',')
 
 saveRDS(list('gex' = scale(log(normCounts+1))), paste0(out, '.RDS')) 
 write.table(x = colData, 
-            file = file.path(getwd(), 'data_immther', 'mariathasan.colData.csv'), 
+            file = file.path(getwd(), 'data', 'mariathasan.colData.csv'), 
             quote = F, row.names = T, sep = ',')
 
 
