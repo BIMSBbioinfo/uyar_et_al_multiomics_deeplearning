@@ -27,9 +27,8 @@ The data is first downloaded into the "GDCdata" sub-folder in the current workin
 From there the data is further processed and prepared, which is written under "GDCdata_prepared".
 
 usage:
-``` 
 <path to Rscript> ./src/download.tcga.R <target folder to save GDCdata> <target folder to save prepared data>
-example: 
+``` 
 /opt/R/4.0/bin/Rscript ./src/download.tcga.R `pwd` `pwd`/GDCdata_prepared
 ```
 
@@ -134,8 +133,9 @@ time snakemake -p -s ../src/snakefile.py -j 4 --configfile ./settings_immther.ya
 
 `compile_figures.R` script is used to invoke `manuscript_figures.Rmd` file to make the manuscript figures in this study. 
 
-usage: 
+The settings file for pan-cancer analysis, the project folder for immunotherapy analysis, and the figure data for TMZ-GBM analysis need to be provided. 
 
+usage: 
 ```
 nohup time -v /opt/R/4.0/bin/Rscript ./src/compile_figures.R ./src/manuscript_figures.Rmd `pwd`/settings.yaml `pwd`/immunotherapy_analysis `pwd`/data/tmz_gbm_figure_data `pwd`/figures `pwd` > figures.log
 ```
