@@ -92,23 +92,6 @@ fit_RSF_clin <- function(clin, M, ntree = 1000) {
   return(list('fit_with' = fit1, 'fit_wo' = fit2, 'C_with' = Cindex1, 'C_wo' = Cindex2))
 }
 
-# this is wrong. 
-# 1. combat cannot handle multiple batch factors at the same time.
-# 2. it is not a good idea to sequentially remove batch effects unless they are orthogonal. 
-correct_batch_effects_wrongly <- function(M, batch.df, method = 'limma') {
-  M.c <- M #corrected matrix
-  for (b in colnames(batch.df)) {
-    batch_factors <- as.character(batch.df[colnames(M.c), b])
-    if(method == 'limma') {
-      M.c <- limma::removeBatchEffect(x = M.c, batch = batch_factors)
-    } else if (method == 'combat') {
-      M.c <- sva::ComBat(dat = M.c, batch = batch_factors)
-    }
-  }
-  return(M.c)
-}
-
-
 # Use RUVseq to correct for batch effects while preserving tumor/normal status
 # counts: raw count matrix
 # colData: batch table including at least one column that contains the factor of interest to be preserved
