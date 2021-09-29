@@ -4,17 +4,21 @@ output:
   word_document: default
   html_document: default
 params:
-  settings_file: ''
-  figures_folder: '/data/bimsbstatic/public/akalin/buyar/manuscript_figures_arcas/test'
+  settings_file: 'settings.yaml' # settings file for pancancer analysis
+  immther_projdir: 'immunotherapy_analysis' # settings file for immunotherapy analysis 
+  tmz_gbm_figure_data_folder: 'data/tmz_gbm_figure_data' # path to data folder for tmz-gbm analysis 
+  figures_folder: 'figures' 
   workdir: '.'
 ---
 
-```{r setup, include=FALSE}
+```{r knitr_setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = FALSE, 
-                      fig.width = 9, fig.height = 11)
+                      fig.width = 9, fig.height = 11, eval = TRUE)
 knitr::opts_knit$set(root.dir = params$workdir)
+```
+
+```{r setup}
 settings <- yaml::read_yaml(params$settings_file)
-message(settings$GDCdataDir)
 FigureFolder <- params$figures_folder
 source(settings$utility_script)
 library(data.table)
@@ -33,14 +37,12 @@ library(caret)
 library(treeheatr)
 library(partykit)
 theme_set(ggpubr::theme_pubclean())
-
-geneSetScoresFolder <- '/data/local/buyar/arcas/subtyping_paper/data/geneset_scores/singscore'
-
 inputDir <- settings$pipeline_output
 assay_dir <- settings$assay_output$folder
 surv <- do.call(rbind, readRDS(settings$surv))
 projectDict <- sapply(yaml::read_yaml(settings$projectDict), 
                       function(x) gsub(' ', '', unlist(strsplit(x, ','))))
+
 tcga_subtypes <- process_tcga_subtypes()
 
 ens2hgnc <- readRDS(settings$ens2hgnc)
@@ -64,7 +66,6 @@ LFs <- import_LFs(TOOLS, inputDir)
 ```{r import_feature_weights}
 FWs <- import_feature_weights(TOOLS, inputDir)
 ```
-
 
 ```{r}
 get_top_by_label <- function(dt, label.type, topN = 5) {
@@ -768,15 +769,15 @@ most predictive fingerprint for TCGA-LUAD samples. E) Decision tree visualisatio
 
 ```{r immunotherapy_response}
 # immunotherapy response prediction analysis: 
-# TODO: pass paths via args
-projDir <- '/data/local/buyar/arcas/pancancer_multiomics_manuscript/results/immunotherapy_response/Mariathasan_et_al'
-settings_imtrp <- yaml::read_yaml(file.path(projDir, 'settings.yaml'))
-gex_all <- readRDS(file.path(projDir, 'mariathasan.gex.all_genes.normalised.RDS'))
-human_gene_signatures <- readRDS(file.path(projDir, 'human_gene_signatures.RDS'))
+projDir <- params$immther_projdir 
+settings_imtrp <- yaml::read_yaml(file.path(projDir, 'settings_immther.yaml'))
+gex_all <- readRDS(file.path(projDir, 'data', 'mariathasan.gex.all_genes.normalised.RDS'))
+human_gene_signatures <- readRDS(file.path(projDir, 'data', 'human_gene_signatures.RDS'))
 
-LFs_imtrp <- import_LFs(c('maui_factors', 'mofa_factors', 'pca_factors'), settings_imtrp$pipeline_output)
-FWs_imtrp <- import_feature_weights(c('maui_factors'), settings_imtrp$pipeline_output)
-colData <- data.table::fread(settings_imtrp$clin)
+LFs_imtrp <- import_LFs(c('maui_factors', 'mofa_factors', 'pca_factors'), 
+                        file.path(projDir, 'output'))
+FWs_imtrp <- import_feature_weights(c('maui_factors'), file.path(projDir, 'output'))
+colData <- data.table::fread(file.path(projDir, 'data', 'mariathasan.colData.csv'))
 colnames(colData)[1] <- 'bcr_patient_barcode'
 
 dt <- do.call(rbind, lapply(names(LFs_imtrp), function(tool) {
@@ -941,7 +942,7 @@ CD8_Teff: 12 gene signature for CD8+ effector T-cells, F_TBRS: 4-gene pan-fibrob
 ```{r tmz_gbm}
 # TMZ resistance in GBM anaysis by Jona.
 # Here I import figure data to have consistent figure styles
-folder <- '/data/local/buyar/arcas/pancancer_multiomics_manuscript/results/tmz_gbm_jona'
+folder <- params$tmz_gbm_figure_data_folder
 
 # cross-validation results predicting TMZ resistance using 
 # maui LFs and other known markers 
