@@ -3,6 +3,8 @@
 # from http://research-pub.gene.com/IMvigor210CoreBiologies/packageVersions/IMvigor210CoreBiologies_0.1.13.tar.gz
 args <- commandArgs(trailingOnly = TRUE)
 
+library(data.table)
+
 sourceFolder <- args[1] #path to source code of IMvigor210CoreBiologies
 geneSetFile <- args[2] # path to file with gene names to be included in the analysis
 
@@ -31,9 +33,10 @@ normCounts <- normCounts[-match(names(which(table(rownames(normCounts)) > 1)),
 
 # create folder to save processed data
 dir.create(file.path(getwd(), 'assays_immther'))
+dir.create(file.path(getwd(), 'data_immther'))
 
 # Save all normalized genes as RDS
-saveRDS(scale(log(normCounts+1)), file.path(getwd(), 'assays_immther', 'mariathasan.gex.all_genes.normalised.RDS'))
+saveRDS(scale(log(normCounts+1)), file.path(getwd(), 'data_immther', 'mariathasan.gex.all_genes.normalised.RDS'))
 
 # pick top 5000 genes by sd
 normCounts <- normCounts[names(sort(apply(normCounts, 1, sd), decreasing = T)[1:5000]),]
@@ -45,11 +48,8 @@ write.table(x = scale(log(normCounts+1)),
 
 saveRDS(list('gex' = scale(log(normCounts+1))), paste0(out, '.RDS')) 
 write.table(x = colData, 
-            file = file.path(getwd(), 'assays_immther', 'mariathasan.colData.csv'), 
+            file = file.path(getwd(), 'data_immther', 'mariathasan.colData.csv'), 
             quote = F, row.names = T, sep = ',')
-
-
-
 
 
 
