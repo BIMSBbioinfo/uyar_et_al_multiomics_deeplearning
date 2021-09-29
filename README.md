@@ -114,8 +114,10 @@ The transcriptome data was extracted from the source of the R package [IMvigor21
 usage:
 
 ```
-<path to Rscript> ./src/prepare_data.immther.R <path to source folder for IMvigor210CoreBiologies> <path to gene sets file>
-/opt/R/4.0/bin/Rscript ./src/prepare_data.immther.R ./IMvigor210CoreBiologies ./data/hallmarks_plus_xcell.txt
+cd immunotherapy_analysis
+wget http://research-pub.gene.com/IMvigor210CoreBiologies/packageVersions/IMvigor210CoreBiologies_0.1.13.tar.gz
+tar -xzvf IMvigor210CoreBiologies_0.1.13.tar.gz
+/opt/R/4.0/bin/Rscript ../src/prepare_data.immther.R ./IMvigor210CoreBiologies ../data/hallmarks_plus_xcell.txt
 ```
 
 ## 2.2 Run omics tools 
@@ -124,7 +126,7 @@ We run MAUI, MOFA, and PCA to learn latent factors for this dataset.
 
 usage
 ```
-time snakemake -p -s ./src/snakefile.py -j 4 --configfile ./settings_immther.yaml --keep-going
+time snakemake -p -s ../src/snakefile.py -j 4 --configfile ./settings_immther.yaml --keep-going
 ```
 
 
