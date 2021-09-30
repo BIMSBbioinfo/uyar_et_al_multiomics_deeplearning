@@ -24,10 +24,9 @@ This script uses TCGAbiolinks package to download gene expression (FPKM), methyl
 files along with patient-related clinical meta-data. 
 
 The data is first downloaded into the "GDCdata" sub-folder in the current working directory. 
-From there the data is further processed and prepared, which is written under "GDCdata_prepared".
+From there the data is further processed and prepared, which is saved under "GDCdata_prepared".
 
 usage:
-<path to Rscript> ./src/download.tcga.R <target folder to save GDCdata> <target folder to save prepared data>
 ``` 
 /opt/R/4.0/bin/Rscript ./src/download.tcga.R `pwd` `pwd`/GDCdata_prepared
 ```
@@ -123,7 +122,7 @@ tar -xzvf IMvigor210CoreBiologies_0.1.13.tar.gz
 
 We run MAUI, MOFA, and PCA to learn latent factors for this dataset. 
 
-usage
+usage:
 ```
 time snakemake -p -s ../src/snakefile.py -j 4 --configfile ./settings_immther.yaml --keep-going
 ```
