@@ -34,7 +34,7 @@ usage:
 /opt/R/4.0/bin/Rscript ./src/download.tcga.R `pwd` `pwd`/GDCdata_prepared
 ```
 
-### 1.1.2 CNVs: download.tcga.firehore.R
+### 1.1.2 CNVs: download.tcga.firehose.R
 
 This script uses RTCGAToolbox and TCGAbiolinks packages to download Somatic Copy Number Alteration (GISTIC scores) 
 from BROAD Firehose data. 
